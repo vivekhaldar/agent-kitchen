@@ -650,11 +650,11 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Filter by `since` using file mtime.
 - [x] Write tests with fixture files (23 tests covering parsing, filtering, index lookup, edge cases).
 
-**Task 1.4: Cache layer**
-- Implement `SummaryCache` class with load, save, get, set, needs_refresh methods.
-- Cache location: `~/.cache/agent-kitchen/summaries.json`.
-- Atomic writes (write to .tmp, rename).
-- Write tests.
+**Task 1.4: Cache layer** [DONE]
+- [x] Implement `SummaryCache` class with load, save, get, set, needs_refresh methods.
+- [x] Cache location: `~/.cache/agent-kitchen/summaries.json`.
+- [x] Atomic writes (write to .tmp, rename).
+- [x] Write tests (16 tests covering roundtrip, invalidation, corruption, atomicity).
 
 ### Phase 2: LLM integration
 
