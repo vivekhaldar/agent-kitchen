@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent_kitchen.cache import SummaryCache
-from agent_kitchen.config import CACHE_DIR, SCAN_WINDOW_DAYS, SERVER_PORT
+from agent_kitchen.config import CACHE_DIR, REFRESH_INTERVAL_SECONDS, SCAN_WINDOW_DAYS, SERVER_PORT
 from agent_kitchen.git_status import get_repo_root
 from agent_kitchen.grouping import group_sessions
 from agent_kitchen.scanner import scan_claude_sessions, scan_codex_sessions
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 # In-memory dashboard data, swapped atomically on each scan
 _dashboard_data: dict | None = None
+
+# Background refresh task handle, stored for cancellation on shutdown
+_refresh_task: asyncio.Task | None = None
 
 
 def _serialize_dashboard(data: dict) -> dict:
@@ -129,9 +133,43 @@ def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
     subprocess.run(["osascript", "-e", applescript], check=True)
 
 
-def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
-    app = FastAPI(title="Agent Kitchen")
+async def _background_refresh_loop(interval: int = REFRESH_INTERVAL_SECONDS) -> None:
+    """Periodically re-run the scan pipeline and swap in-memory data atomically."""
+    global _dashboard_data
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            logger.info("Background refresh starting")
+            new_data = await run_scan_pipeline()
+            _dashboard_data = new_data
+            logger.info("Background refresh complete")
+        except Exception:
+            logger.exception("Background refresh failed")
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Start background refresh on startup, cancel on shutdown."""
+    global _refresh_task
+    _refresh_task = asyncio.create_task(_background_refresh_loop())
+    yield
+    _refresh_task.cancel()
+    try:
+        await _refresh_task
+    except asyncio.CancelledError:
+        pass
+    _refresh_task = None
+
+
+def create_app(*, enable_background_refresh: bool = True) -> FastAPI:
+    """Create and configure the FastAPI application.
+
+    Args:
+        enable_background_refresh: If True, start periodic background rescan on startup.
+            Set to False in tests to avoid background tasks.
+    """
+    lifespan = _lifespan if enable_background_refresh else None
+    app = FastAPI(title="Agent Kitchen", lifespan=lifespan)
 
     @app.get("/api/sessions")
     async def get_sessions():

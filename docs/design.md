@@ -702,10 +702,10 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Print progress during startup ("Scanning... Found 45 sessions. Summarizing 12 new sessions...").
 - [x] Write tests (23 tests covering all endpoints, serialization, scan pipeline, and error handling).
 
-**Task 4.2: Background refresh**
-- Run rescan every 60 seconds in a background asyncio task.
-- Only re-summarize sessions with changed mtime.
-- Update in-memory session data atomically (swap reference, don't mutate in place).
+**Task 4.2: Background refresh** [DONE]
+- [x] Run rescan every 60 seconds in a background asyncio task.
+- [x] Only re-summarize sessions with changed mtime.
+- [x] Update in-memory session data atomically (swap reference, don't mutate in place).
 
 **Task 4.3: CLI entry point**
 - Add a `[project.scripts]` entry so `agent-kitchen` command starts the server.

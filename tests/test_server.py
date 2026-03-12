@@ -1,6 +1,7 @@
-# ABOUTME: Tests for the FastAPI server endpoints and startup orchestration.
-# ABOUTME: Covers /api/sessions, /api/refresh, /api/launch, and the scan pipeline.
+# ABOUTME: Tests for the FastAPI server endpoints, startup orchestration, and background refresh.
+# ABOUTME: Covers /api/sessions, /api/refresh, /api/launch, scan pipeline, and periodic rescan.
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -76,7 +77,7 @@ def app(mock_dashboard_data):
     """Create a test FastAPI app with mocked scan pipeline."""
     from agent_kitchen.server import create_app
 
-    test_app = create_app()
+    test_app = create_app(enable_background_refresh=False)
     # Inject pre-built data directly
     from agent_kitchen import server
 
@@ -413,3 +414,206 @@ class TestScanPipeline:
             result = await run_scan_pipeline()
             assert result["repo_groups"] == []
             assert result["non_repo_groups"] == []
+
+
+# --- Background refresh ---
+
+
+class TestBackgroundRefresh:
+    @pytest.mark.asyncio
+    async def test_refresh_loop_calls_scan_pipeline(self):
+        """Background loop should call run_scan_pipeline after the interval."""
+        from agent_kitchen import server
+        from agent_kitchen.server import _background_refresh_loop
+
+        call_count = 0
+        original_data = server._dashboard_data
+
+        async def mock_pipeline():
+            nonlocal call_count
+            call_count += 1
+            return {
+                "repo_groups": [],
+                "non_repo_groups": [],
+                "last_scanned": datetime.now(timezone.utc).isoformat(),
+                "scan_duration_ms": 50,
+            }
+
+        with patch("agent_kitchen.server.run_scan_pipeline", side_effect=mock_pipeline):
+            task = asyncio.create_task(_background_refresh_loop(interval=0.05))
+            await asyncio.sleep(0.15)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        assert call_count >= 2
+        server._dashboard_data = original_data
+
+    @pytest.mark.asyncio
+    async def test_refresh_loop_updates_dashboard_data_atomically(self):
+        """Background loop should swap _dashboard_data reference, not mutate."""
+        from agent_kitchen import server
+        from agent_kitchen.server import _background_refresh_loop
+
+        original_data = server._dashboard_data
+        new_group = _make_repo_group(repo_name="refreshed-project")
+        new_data = {
+            "repo_groups": [new_group],
+            "non_repo_groups": [],
+            "last_scanned": datetime.now(timezone.utc).isoformat(),
+            "scan_duration_ms": 100,
+        }
+
+        with patch(
+            "agent_kitchen.server.run_scan_pipeline",
+            new_callable=AsyncMock,
+            return_value=new_data,
+        ):
+            task = asyncio.create_task(_background_refresh_loop(interval=0.05))
+            await asyncio.sleep(0.1)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        assert server._dashboard_data is new_data
+        assert server._dashboard_data["repo_groups"][0].repo_name == "refreshed-project"
+        server._dashboard_data = original_data
+
+    @pytest.mark.asyncio
+    async def test_refresh_loop_survives_pipeline_errors(self):
+        """Background loop should log errors but keep running if scan fails."""
+        from agent_kitchen.server import _background_refresh_loop
+
+        call_count = 0
+
+        async def failing_then_succeeding():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("Scan failed")
+            return {
+                "repo_groups": [],
+                "non_repo_groups": [],
+                "last_scanned": datetime.now(timezone.utc).isoformat(),
+                "scan_duration_ms": 50,
+            }
+
+        with patch("agent_kitchen.server.run_scan_pipeline", side_effect=failing_then_succeeding):
+            task = asyncio.create_task(_background_refresh_loop(interval=0.05))
+            await asyncio.sleep(0.15)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        # Should have continued past the error and called at least twice
+        assert call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_refresh_loop_cancellation(self):
+        """Background loop should exit cleanly when cancelled."""
+        from agent_kitchen.server import _background_refresh_loop
+
+        with patch(
+            "agent_kitchen.server.run_scan_pipeline",
+            new_callable=AsyncMock,
+            return_value={
+                "repo_groups": [],
+                "non_repo_groups": [],
+                "last_scanned": "",
+                "scan_duration_ms": 0,
+            },
+        ):
+            task = asyncio.create_task(_background_refresh_loop(interval=10))
+            # Cancel while it's sleeping (before first run)
+            await asyncio.sleep(0.01)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    @pytest.mark.asyncio
+    async def test_lifespan_starts_and_stops_refresh(self):
+        """Lifespan should create a background task on startup and cancel on shutdown."""
+        from agent_kitchen import server
+        from agent_kitchen.server import _lifespan, create_app
+
+        app = create_app(enable_background_refresh=False)
+
+        with patch(
+            "agent_kitchen.server.run_scan_pipeline",
+            new_callable=AsyncMock,
+            return_value={
+                "repo_groups": [],
+                "non_repo_groups": [],
+                "last_scanned": "",
+                "scan_duration_ms": 0,
+            },
+        ):
+            async with _lifespan(app):
+                assert server._refresh_task is not None
+                assert not server._refresh_task.done()
+
+            # After exiting lifespan, task should be cancelled
+            assert server._refresh_task is None
+
+    def test_create_app_without_background_refresh(self):
+        """create_app with enable_background_refresh=False should not use our lifespan."""
+        from agent_kitchen.server import _lifespan, create_app
+
+        app = create_app(enable_background_refresh=False)
+        # Should not be our custom lifespan
+        assert app.router.lifespan_context is not _lifespan
+
+    def test_create_app_with_background_refresh(self):
+        """create_app with default args should use our custom lifespan."""
+        from agent_kitchen.server import _lifespan, create_app
+
+        app = create_app(enable_background_refresh=True)
+        assert app.router.lifespan_context is _lifespan
+
+    @pytest.mark.asyncio
+    async def test_refresh_does_not_mutate_old_data(self):
+        """After refresh, the old data reference should be untouched."""
+        from agent_kitchen import server
+        from agent_kitchen.server import _background_refresh_loop
+
+        old_data = {
+            "repo_groups": [_make_repo_group(repo_name="old-project")],
+            "non_repo_groups": [],
+            "last_scanned": "2026-01-01T00:00:00Z",
+            "scan_duration_ms": 100,
+        }
+        server._dashboard_data = old_data
+        old_data_copy = dict(old_data)
+
+        new_data = {
+            "repo_groups": [_make_repo_group(repo_name="new-project")],
+            "non_repo_groups": [],
+            "last_scanned": datetime.now(timezone.utc).isoformat(),
+            "scan_duration_ms": 50,
+        }
+
+        with patch(
+            "agent_kitchen.server.run_scan_pipeline",
+            new_callable=AsyncMock,
+            return_value=new_data,
+        ):
+            task = asyncio.create_task(_background_refresh_loop(interval=0.05))
+            await asyncio.sleep(0.1)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        # Old data dict should be unmodified
+        assert old_data["last_scanned"] == old_data_copy["last_scanned"]
+        assert old_data["repo_groups"][0].repo_name == "old-project"
+        # New data should be the current
+        assert server._dashboard_data is new_data
+        server._dashboard_data = None
