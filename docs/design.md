@@ -214,7 +214,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+dev = ["pytest", "pytest-asyncio", "pre-commit", "ruff"]
 ```
 
 ### Authentication
@@ -619,6 +619,16 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - Create `config.py` with default constants.
 - Create `models.py` with the Session, RepoGroup, NonRepoGroup dataclasses.
 - Verify the project can be installed with `uv pip install -e .`.
+- Set up pre-commit hooks for auto-formatting and tests:
+  - Install `pre-commit` as a dev dependency.
+  - Create `.pre-commit-config.yaml` with:
+    - **ruff** for linting and auto-formatting (replaces black + isort + flake8). Use `ruff check --fix` and `ruff format`.
+    - **ruff** configuration in `pyproject.toml`: target Python 3.12, line length 99, isort-compatible import sorting.
+  - Create a `pre-commit` git hook (via `pre-commit install`) that runs:
+    1. `ruff check --fix` — lint and auto-fix (import sorting, unused imports, etc.).
+    2. `ruff format` — auto-format all staged Python files.
+    3. `pytest` — run the full test suite. Commit is blocked if any test fails.
+  - Verify the hook works: stage a deliberately mis-formatted file, run `git commit`, confirm ruff fixes it and tests run.
 
 **Task 1.2: Claude Code scanner**
 - Implement `scan_claude_sessions(since: datetime) -> list[Session]`.
