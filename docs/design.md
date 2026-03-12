@@ -693,13 +693,14 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 
 ### Phase 4: Server
 
-**Task 4.1: FastAPI app**
-- Implement `GET /api/sessions` — returns grouped session data as JSON.
-- Implement `GET /api/refresh` — triggers rescan, returns updated data.
-- Implement `GET /api/launch` — opens terminal with resume command (macOS AppleScript).
-- Mount `static/` directory for frontend files.
-- Implement startup sequence: scan → cache check → summarize → group → serve.
-- Print progress during startup ("Scanning... Found 45 sessions. Summarizing 12 new sessions...").
+**Task 4.1: FastAPI app** [DONE]
+- [x] Implement `GET /api/sessions` — returns grouped session data as JSON.
+- [x] Implement `GET /api/refresh` — triggers rescan, returns updated data.
+- [x] Implement `GET /api/launch` — opens terminal with resume command (macOS AppleScript).
+- [x] Mount `static/` directory for frontend files.
+- [x] Implement startup sequence: scan → cache check → summarize → group → serve.
+- [x] Print progress during startup ("Scanning... Found 45 sessions. Summarizing 12 new sessions...").
+- [x] Write tests (23 tests covering all endpoints, serialization, scan pipeline, and error handling).
 
 **Task 4.2: Background refresh**
 - Run rescan every 60 seconds in a background asyncio task.
