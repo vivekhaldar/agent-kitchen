@@ -683,13 +683,13 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Handle non-git directories gracefully (return None for repo_root).
 - [x] Write tests (16 tests covering repo root detection, caching, all git status fields, edge cases).
 
-**Task 3.2: Grouping logic**
-- Implement function that takes `list[Session]` and returns `list[RepoGroup]` + `list[NonRepoGroup]`.
-- Group sessions by `repo_root`.
-- Sort repos by most recent `last_active` descending.
-- Sort sessions within each repo by `last_active` descending.
-- Attach live git status to each RepoGroup.
-- Write tests.
+**Task 3.2: Grouping logic** [DONE]
+- [x] Implement `group_sessions()` in `grouping.py` that takes `list[Session]` and returns `tuple[list[RepoGroup], list[NonRepoGroup]]`.
+- [x] Group sessions by `repo_root` (sessions without repo_root grouped by `cwd` into NonRepoGroup).
+- [x] Sort repos by most recent `last_active` descending.
+- [x] Sort sessions within each repo by `last_active` descending.
+- [x] Attach live git status to each RepoGroup (called once per unique repo_root).
+- [x] Write tests (17 tests covering grouping, sorting, git status attachment, edge cases).
 
 ### Phase 4: Server
 
