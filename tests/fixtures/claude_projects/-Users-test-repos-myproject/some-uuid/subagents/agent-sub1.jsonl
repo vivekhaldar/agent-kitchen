@@ -1,0 +1,1 @@
+{"type":"user","message":{"role":"user","content":"subagent task"},"timestamp":"2026-03-01T10:00:00Z","sessionId":"sub1","cwd":"/Users/test/repos/myproject","gitBranch":"main","uuid":"u1","parentUuid":null,"isSidechain":false,"userType":"external"}

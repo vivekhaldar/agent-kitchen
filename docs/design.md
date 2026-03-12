@@ -630,15 +630,15 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
     3. `pytest` — run the full test suite. Commit is blocked if any test fails.
   - Verify the hook works: stage a deliberately mis-formatted file, run `git commit`, confirm ruff fixes it and tests run.
 
-**Task 1.2: Claude Code scanner**
-- Implement `scan_claude_sessions(since: datetime) -> list[Session]`.
-- Walk `~/.claude/projects/*/` for JSONL files (skip subagent directories).
-- Decode directory names to recover cwd.
-- Read first line for: sessionId, cwd, gitBranch, slug, started_at.
-- Read last line for: last_active.
-- Count user + assistant type lines for turn_count.
-- Filter by `since` using file mtime.
-- Write tests using fixture JSONL files (create small test fixtures, don't use real session data).
+**Task 1.2: Claude Code scanner** [DONE]
+- [x] Implement `scan_claude_sessions(since: datetime) -> list[Session]`.
+- [x] Walk `~/.claude/projects/*/` for JSONL files (skip subagent directories).
+- [x] Decode directory names to recover cwd (naive decode as fallback; cwd from JSONL is authoritative).
+- [x] Read first line for: sessionId, cwd, gitBranch, slug, started_at.
+- [x] Read last line for: last_active.
+- [x] Count user + assistant type lines for turn_count.
+- [x] Filter by `since` using file mtime.
+- [x] Write tests using fixture JSONL files (16 tests covering parsing, filtering, edge cases).
 
 **Task 1.3: Codex scanner**
 - Implement `scan_codex_sessions(since: datetime) -> list[Session]`.
