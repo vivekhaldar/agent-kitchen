@@ -219,15 +219,34 @@ dev = ["pytest", "pytest-asyncio"]
 
 ### Authentication
 
-The summarizer uses the Claude Agent SDK authenticated via **Max subscription** (not an API key):
+The summarizer uses the Claude Agent SDK authenticated via **Max subscription** (not an API key).
 
-1. The user runs `claude setup-token` once, which opens a browser for OAuth and generates a token.
-2. The token is stored and made available as `CLAUDE_CODE_OAUTH_TOKEN`.
-3. The Agent SDK automatically uses this token when `ANTHROPIC_API_KEY` is not set.
+The subscription token is stored in the `pass` password manager:
+```bash
+pass dev/CLAUDE_SUBSCRIPTION_TOKEN
+```
 
-**Important**: If `ANTHROPIC_API_KEY` is also set in the environment, the SDK will use that (and bill the API account) instead of the Max subscription. The app should check for this and warn the user.
+At startup, the app retrieves the token by running `pass dev/CLAUDE_SUBSCRIPTION_TOKEN` and sets it as `CLAUDE_CODE_OAUTH_TOKEN` in the process environment before initializing the Agent SDK. This is handled in `config.py`:
 
-At startup, verify auth is working by making a trivial Haiku call. If it fails, print a clear error message telling the user to run `claude setup-token`.
+```python
+import subprocess
+
+def get_claude_token() -> str:
+    result = subprocess.run(
+        ["pass", "dev/CLAUDE_SUBSCRIPTION_TOKEN"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Failed to retrieve Claude token from pass. "
+            "Ensure `pass dev/CLAUDE_SUBSCRIPTION_TOKEN` is set."
+        )
+    return result.stdout.strip()
+```
+
+**Important**: If `ANTHROPIC_API_KEY` is also set in the environment, the SDK will use that (and bill the API account) instead of the Max subscription. The app should unset `ANTHROPIC_API_KEY` from the process environment at startup to avoid this.
+
+At startup, verify auth is working by making a trivial Haiku call. If it fails, print a clear error message referencing the `pass` entry.
 
 ---
 
