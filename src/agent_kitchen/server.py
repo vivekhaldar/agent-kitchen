@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent_kitchen.cache import SummaryCache
-from agent_kitchen.config import CACHE_DIR, REFRESH_INTERVAL_SECONDS, SCAN_WINDOW_DAYS, SERVER_PORT
+from agent_kitchen.config import CACHE_DIR, REFRESH_INTERVAL_SECONDS, SCAN_WINDOW_DAYS
 from agent_kitchen.git_status import get_repo_root
 from agent_kitchen.grouping import group_sessions
 from agent_kitchen.scanner import scan_claude_sessions, scan_codex_sessions
@@ -222,33 +222,9 @@ def create_app(*, enable_background_refresh: bool = True) -> FastAPI:
 
 def main():
     """Entry point for the agent-kitchen CLI command."""
-    import uvicorn
+    from agent_kitchen.cli import main as cli_main
 
-    from agent_kitchen.config import setup_auth
-
-    print("Agent Kitchen starting...")
-
-    # Set up LLM authentication
-    try:
-        setup_auth()
-        print("Authentication configured via Max subscription.")
-    except RuntimeError as e:
-        print(f"Warning: {e}")
-        print("LLM summarization will use fallback mode.")
-
-    # Create the app
-    app = create_app()
-
-    # Run initial scan synchronously before starting the server
-    async def initial_scan():
-        global _dashboard_data
-        _dashboard_data = await run_scan_pipeline()
-
-    asyncio.run(initial_scan())
-    print(f"Dashboard ready at http://localhost:{SERVER_PORT}")
-
-    # Start the server
-    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, log_level="warning")
+    cli_main()
 
 
 if __name__ == "__main__":

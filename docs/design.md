@@ -707,10 +707,11 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Only re-summarize sessions with changed mtime.
 - [x] Update in-memory session data atomically (swap reference, don't mutate in place).
 
-**Task 4.3: CLI entry point**
-- Add a `[project.scripts]` entry so `agent-kitchen` command starts the server.
-- Parse CLI args: `--port`, `--scan-days`, `--no-open` (don't auto-open browser).
-- On startup, open `http://localhost:8099` in the default browser (unless `--no-open`).
+**Task 4.3: CLI entry point** [DONE]
+- [x] Add a `[project.scripts]` entry so `agent-kitchen` command starts the server.
+- [x] Parse CLI args: `--port`, `--scan-days`, `--no-open` (don't auto-open browser).
+- [x] On startup, open `http://localhost:8099` in the default browser (unless `--no-open`).
+- [x] Write tests (12 tests covering arg parsing, browser open/skip, config overrides, auth failure).
 
 ### Phase 5: Frontend
 
