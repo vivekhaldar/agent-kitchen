@@ -128,9 +128,10 @@ Use `thread_name` as a free summary when available (avoids an LLM call).
 
 **Resuming a session:**
 ```bash
-codex --resume <session-id>
+codex resume <session-id>
 ```
-(Verify this is the correct CLI flag before shipping.)
+`resume` is a subcommand (not a flag). It accepts either a UUID or a thread name.
+It also supports `-C <dir>` to set the working directory.
 
 ---
 
@@ -483,7 +484,7 @@ def launch_session(source: str, session_id: str, cwd: str):
     if source == "claude":
         cmd = f"cd {cwd} && claude --continue --session-id {session_id}"
     elif source == "codex":
-        cmd = f"cd {cwd} && codex --resume {session_id}"
+        cmd = f"cd {cwd} && codex resume {session_id}"
 
     # Open in a new Terminal.app tab
     applescript = f'''
