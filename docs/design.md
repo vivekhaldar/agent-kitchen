@@ -677,11 +677,11 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 
 ### Phase 3: Git status and grouping
 
-**Task 3.1: Git status checker**
-- Implement `get_repo_root(cwd)` with caching.
-- Implement `get_git_status(repo_root)` — branch, dirty, unpushed, untracked.
-- Handle non-git directories gracefully (return None for repo_root).
-- Write tests.
+**Task 3.1: Git status checker** [DONE]
+- [x] Implement `get_repo_root(cwd)` with caching.
+- [x] Implement `get_git_status(repo_root)` — branch, dirty, unpushed, untracked.
+- [x] Handle non-git directories gracefully (return None for repo_root).
+- [x] Write tests (16 tests covering repo root detection, caching, all git status fields, edge cases).
 
 **Task 3.2: Grouping logic**
 - Implement function that takes `list[Session]` and returns `list[RepoGroup]` + `list[NonRepoGroup]`.
