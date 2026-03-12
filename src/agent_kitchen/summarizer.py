@@ -1,8 +1,13 @@
 # ABOUTME: Extracts compact context from session JSONL files for LLM summarization.
-# ABOUTME: Handles both Claude Code and Codex CLI session formats.
+# ABOUTME: Calls Claude Haiku via Agent SDK to generate summaries and classify session status.
 
+import asyncio
 import json
 import logging
+import re
+from dataclasses import dataclass
+
+from agent_kitchen.config import HAIKU_MODEL, SUMMARY_CONCURRENCY
 
 logger = logging.getLogger(__name__)
 
@@ -168,3 +173,176 @@ def extract_context_for_summary(file_path: str, source: str) -> str:
             parts.append(f"  [{role}]: {_truncate(text)}")
 
     return "\n".join(parts)
+
+
+# --- LLM Summarization ---
+
+VALID_STATUSES = {"done", "likely done", "in progress", "likely in progress", "waiting for input"}
+
+SUMMARY_PROMPT_TEMPLATE = """\
+You are analyzing a coding agent session to generate a brief summary and status.
+
+Session context:
+- Source: {source}
+- Working directory: {cwd}
+{context}
+
+Respond in exactly this JSON format, nothing else:
+{{"summary": "<one-line summary of what this session is about, max 80 chars>", \
+"status": "<one of: done, likely done, in progress, likely in progress, waiting for input>"}}
+
+Rules for status:
+- "done": The task was clearly completed. Agent confirmed completion or user acknowledged it.
+- "likely done": The task appears complete but there's no explicit confirmation.
+- "in progress": Work is actively ongoing, not yet complete.
+- "likely in progress": Some work happened but it's unclear if more is needed.
+- "waiting for input": The last assistant message asks the user a question or presents options.\
+"""
+
+
+@dataclass
+class SummarizeResult:
+    """Result of LLM summarization for a session."""
+
+    summary: str
+    status: str
+
+
+async def _call_llm(prompt: str) -> str:
+    """Call Claude Haiku via the Agent SDK and return the text response."""
+    from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+
+    result_text = ""
+    async for msg in query(
+        prompt=prompt,
+        options=ClaudeAgentOptions(
+            model=HAIKU_MODEL,
+            max_turns=1,
+        ),
+    ):
+        if isinstance(msg, ResultMessage) and msg.result:
+            result_text = msg.result
+    return result_text
+
+
+def _extract_json_from_response(text: str) -> dict | None:
+    """Parse JSON from an LLM response, handling markdown code blocks."""
+    text = text.strip()
+    # Strip markdown code block if present
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    if match:
+        text = match.group(1).strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict) and "summary" in data and "status" in data:
+            return data
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
+def _make_fallback(context: str) -> SummarizeResult:
+    """Generate a fallback summary from the context string."""
+    # Try to extract the first user message from the context
+    summary = ""
+    for line in context.split("\n"):
+        if line.startswith("First user message:"):
+            summary = line[len("First user message:") :].strip()
+            break
+    if not summary:
+        summary = context[:80] if context else "Unknown session"
+    return SummarizeResult(summary=_truncate(summary, 80), status="likely in progress")
+
+
+async def summarize_session(context: str, source: str, cwd: str) -> SummarizeResult:
+    """Generate a summary and status for a session using Claude Haiku.
+
+    Args:
+        context: Extracted context string from extract_context_for_summary.
+        source: "claude" or "codex".
+        cwd: Working directory of the session.
+
+    Returns:
+        SummarizeResult with summary and status fields.
+    """
+    prompt = SUMMARY_PROMPT_TEMPLATE.format(source=source, cwd=cwd, context=context)
+
+    try:
+        response = await _call_llm(prompt)
+    except Exception:
+        logger.warning("LLM call failed for session in %s", cwd, exc_info=True)
+        return _make_fallback(context)
+
+    data = _extract_json_from_response(response)
+    if data is None:
+        logger.warning("Failed to parse LLM response as JSON: %s", response[:200])
+        return _make_fallback(context)
+
+    summary = _truncate(str(data["summary"]), 80)
+    status = str(data["status"])
+    if status not in VALID_STATUSES:
+        status = "likely in progress"
+
+    return SummarizeResult(summary=summary, status=status)
+
+
+async def batch_summarize(
+    sessions: list,
+    cache,
+    concurrency: int = SUMMARY_CONCURRENCY,
+) -> list[SummarizeResult]:
+    """Summarize multiple sessions concurrently, using cache where possible.
+
+    Args:
+        sessions: List of Session objects to summarize.
+        cache: SummaryCache instance for caching results.
+        concurrency: Max concurrent LLM calls.
+
+    Returns:
+        List of SummarizeResult in the same order as input sessions.
+    """
+    if not sessions:
+        return []
+
+    results: list[SummarizeResult | None] = [None] * len(sessions)
+    to_summarize: list[tuple[int, object]] = []  # (index, session) pairs needing LLM
+
+    # Check cache first
+    for i, session in enumerate(sessions):
+        if not cache.needs_refresh(session.id, session.file_mtime):
+            cached = cache.get(session.id)
+            if cached:
+                results[i] = SummarizeResult(summary=cached["summary"], status=cached["status"])
+                continue
+        to_summarize.append((i, session))
+
+    if not to_summarize:
+        return results  # type: ignore[return-value]
+
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _summarize_one(idx: int, session) -> None:
+        context = extract_context_for_summary(session.file_path, session.source)
+        if not context:
+            result = SummarizeResult(
+                summary=session.summary or "Unknown session",
+                status="likely in progress",
+            )
+            results[idx] = result
+            return
+
+        async with semaphore:
+            result = await summarize_session(context, session.source, session.cwd)
+
+        # If session already has a summary (e.g. Codex thread_name), keep it unless LLM is better
+        if session.summary and not result.summary:
+            result = SummarizeResult(summary=session.summary, status=result.status)
+
+        results[idx] = result
+        cache.set(session.id, result.summary, result.status, session.file_mtime)
+
+    tasks = [_summarize_one(idx, session) for idx, session in to_summarize]
+    await asyncio.gather(*tasks)
+
+    cache.save()
+    return results  # type: ignore[return-value]

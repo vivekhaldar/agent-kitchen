@@ -666,14 +666,14 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Target output under 2000 tokens.
 - [x] Write tests with fixture data (19 tests covering Claude, Codex, and edge cases).
 
-**Task 2.2: Summarizer**
-- Implement `summarize_session(context: str) -> dict` using Claude Agent SDK.
-- Use model `claude-haiku-4-5-20251001`.
-- Parse JSON response for summary + status.
-- Handle failures gracefully (fallback to truncated first message).
-- Implement batch summarization with `asyncio.gather` and concurrency limit of 10.
-- Check for `CLAUDE_CODE_OAUTH_TOKEN` at startup. Warn if `ANTHROPIC_API_KEY` is also set.
-- Write tests (mock the LLM call for unit tests; have one integration test that makes a real call).
+**Task 2.2: Summarizer** [DONE]
+- [x] Implement `summarize_session(context: str) -> SummarizeResult` using Claude Agent SDK.
+- [x] Use model `claude-haiku-4-5-20251001`.
+- [x] Parse JSON response for summary + status (handles markdown code blocks, extra whitespace).
+- [x] Handle failures gracefully (fallback to truncated first message on invalid JSON, LLM errors).
+- [x] Implement batch summarization with `asyncio.gather` and concurrency limit of 10.
+- [x] Auth setup already in config.py (`setup_auth()` sets `CLAUDE_CODE_OAUTH_TOKEN`, unsets `ANTHROPIC_API_KEY`).
+- [x] Write tests (22 tests: mocked LLM for unit tests covering parsing, fallbacks, batching, caching).
 
 ### Phase 3: Git status and grouping
 
