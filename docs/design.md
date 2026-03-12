@@ -613,13 +613,13 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 
 ### Phase 1: Core infrastructure (get data flowing)
 
-**Task 1.1: Project scaffolding**
-- Create `pyproject.toml` with dependencies (fastapi, uvicorn, claude-agent-sdk).
-- Create `src/agent_kitchen/__init__.py`.
-- Create `config.py` with default constants.
-- Create `models.py` with the Session, RepoGroup, NonRepoGroup dataclasses.
-- Verify the project can be installed with `uv pip install -e .`.
-- Set up pre-commit hooks for auto-formatting and tests:
+**Task 1.1: Project scaffolding** [DONE]
+- [x] Create `pyproject.toml` with dependencies (fastapi, uvicorn, claude-agent-sdk).
+- [x] Create `src/agent_kitchen/__init__.py`.
+- [x] Create `config.py` with default constants.
+- [x] Create `models.py` with the Session, RepoGroup, NonRepoGroup dataclasses.
+- [x] Verify the project can be installed with `uv pip install -e .`.
+- [x] Set up pre-commit hooks for auto-formatting and tests:
   - Install `pre-commit` as a dev dependency.
   - Create `.pre-commit-config.yaml` with:
     - **ruff** for linting and auto-formatting (replaces black + isort + flake8). Use `ruff check --fix` and `ruff format`.
