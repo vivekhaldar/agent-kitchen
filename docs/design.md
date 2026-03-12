@@ -658,13 +658,13 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 
 ### Phase 2: LLM integration
 
-**Task 2.1: Context extractor**
-- Implement `extract_context_for_summary(file_path, source)`.
-- Extract first user message + last 5 text messages.
-- Strip tool_use blocks.
-- Truncate each message to 500 chars.
-- Target output under 2000 tokens.
-- Write tests with fixture data.
+**Task 2.1: Context extractor** [DONE]
+- [x] Implement `extract_context_for_summary(file_path, source)`.
+- [x] Extract first user message + last 5 text messages.
+- [x] Strip tool_use blocks.
+- [x] Truncate each message to 500 chars.
+- [x] Target output under 2000 tokens.
+- [x] Write tests with fixture data (19 tests covering Claude, Codex, and edge cases).
 
 **Task 2.2: Summarizer**
 - Implement `summarize_session(context: str) -> dict` using Claude Agent SDK.
