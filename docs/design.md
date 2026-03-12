@@ -640,15 +640,15 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Filter by `since` using file mtime.
 - [x] Write tests using fixture JSONL files (16 tests covering parsing, filtering, edge cases).
 
-**Task 1.3: Codex scanner**
-- Implement `scan_codex_sessions(since: datetime) -> list[Session]`.
-- Walk `~/.codex/sessions/YYYY/MM/DD/` for JSONL files.
-- Parse session_meta for cwd, git info, session ID.
-- Parse event_msg records for turn count.
-- Load `~/.codex/session_index.jsonl` once for thread_name lookup.
-- Use thread_name as summary when available.
-- Filter by `since`, using directory structure to skip old months.
-- Write tests with fixture files.
+**Task 1.3: Codex scanner** [DONE]
+- [x] Implement `scan_codex_sessions(since: datetime) -> list[Session]`.
+- [x] Walk `~/.codex/sessions/YYYY/MM/DD/` for JSONL files.
+- [x] Parse session_meta for cwd, git info, session ID.
+- [x] Parse event_msg records for turn count (user_message + agent_message).
+- [x] Load `~/.codex/session_index.jsonl` once for thread_name lookup.
+- [x] Use thread_name as summary when available.
+- [x] Filter by `since` using file mtime.
+- [x] Write tests with fixture files (23 tests covering parsing, filtering, index lookup, edge cases).
 
 **Task 1.4: Cache layer**
 - Implement `SummaryCache` class with load, save, get, set, needs_refresh methods.

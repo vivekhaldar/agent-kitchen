@@ -1,0 +1,14 @@
+{"timestamp":"2026-03-10T14:30:00.000Z","type":"session_meta","payload":{"id":"019c0001-aaaa-7777-bbbb-ccccddddeeee","timestamp":"2026-03-10T14:30:00.000Z","cwd":"/Users/test/repos/myproject","originator":"codex_cli_rs","cli_version":"0.111.0","source":"cli","model_provider":"openai","git":{"commit_hash":"abc123","branch":"main","repository_url":"https://github.com/test/myproject"}}}
+{"timestamp":"2026-03-10T14:30:00.100Z","type":"turn_context","payload":{"turn_id":"turn-001","model":"gpt-5.4","cwd":"/Users/test/repos/myproject"}}
+{"timestamp":"2026-03-10T14:30:01.000Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"System instructions here"}]}}
+{"timestamp":"2026-03-10T14:30:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Fix the broken tests in test_runner.py"}]}}
+{"timestamp":"2026-03-10T14:30:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-001"}}
+{"timestamp":"2026-03-10T14:30:04.000Z","type":"event_msg","payload":{"type":"user_message","message":"Fix the broken tests in test_runner.py"}}
+{"timestamp":"2026-03-10T14:30:10.000Z","type":"response_item","payload":{"type":"reasoning","content":"Let me look at the test file..."}}
+{"timestamp":"2026-03-10T14:30:15.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"cat test_runner.py\"}","call_id":"call_001"}}
+{"timestamp":"2026-03-10T14:30:16.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_001","output":"test file contents..."}}
+{"timestamp":"2026-03-10T14:30:20.000Z","type":"event_msg","payload":{"type":"agent_message","message":"I found the issue. The test was using an outdated fixture."}}
+{"timestamp":"2026-03-10T14:30:25.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I found and fixed the broken tests."}]}}
+{"timestamp":"2026-03-10T14:30:30.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done fixing the tests."}}
+{"timestamp":"2026-03-10T14:30:31.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"output_tokens":500}}}}
+{"timestamp":"2026-03-10T14:30:32.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-001"}}

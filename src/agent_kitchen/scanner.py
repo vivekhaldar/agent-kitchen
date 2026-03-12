@@ -1,14 +1,15 @@
-# ABOUTME: Reads ~/.claude session JSONL files and extracts Session metadata.
+# ABOUTME: Reads ~/.claude and ~/.codex session JSONL files and extracts Session metadata.
 # ABOUTME: Walks project directories, parses records, decodes paths, and yields Session objects.
 
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from agent_kitchen.config import CLAUDE_PROJECTS_DIR
+from agent_kitchen.config import CLAUDE_PROJECTS_DIR, CODEX_INDEX_PATH, CODEX_SESSIONS_DIR
 from agent_kitchen.models import Session
 
 logger = logging.getLogger(__name__)
@@ -182,5 +183,176 @@ def scan_claude_sessions(
             session = _scan_single_claude_file(jsonl_file)
             if session:
                 sessions.append(session)
+
+    return sessions
+
+
+# Regex to parse Codex session filenames:
+# rollout-YYYY-MM-DDTHH-MM-SS-<UUID>.jsonl
+_CODEX_FILENAME_RE = re.compile(
+    r"^rollout-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(.+)\.jsonl$"
+)
+
+
+def parse_codex_filename(filename: str) -> tuple[str, datetime] | None:
+    """Extract the session ID (ULID/UUID) and start timestamp from a Codex filename.
+
+    Returns (session_id, started_at) or None if the filename doesn't match.
+    """
+    m = _CODEX_FILENAME_RE.match(filename)
+    if not m:
+        return None
+    year, month, day, hour, minute, second, session_id = m.groups()
+    try:
+        started_at = datetime(
+            int(year),
+            int(month),
+            int(day),
+            int(hour),
+            int(minute),
+            int(second),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        return None
+    return session_id, started_at
+
+
+def load_codex_session_index(index_path: Path | None = None) -> dict[str, str]:
+    """Load the Codex session index file into a dict mapping session ID to thread_name."""
+    index_path = index_path or CODEX_INDEX_PATH
+    if not index_path.exists():
+        return {}
+
+    result: dict[str, str] = {}
+    try:
+        with open(index_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                record = _parse_jsonl_line(line)
+                if record and "id" in record and "thread_name" in record:
+                    result[record["id"]] = record["thread_name"]
+    except OSError as e:
+        logger.warning("Failed to read Codex session index %s: %s", index_path, e)
+    return result
+
+
+def _scan_single_codex_file(file_path: Path, session_index: dict[str, str]) -> Session | None:
+    """Parse a single Codex JSONL session file into a Session object."""
+    parsed = parse_codex_filename(file_path.name)
+    if not parsed:
+        return None
+
+    session_id, filename_started_at = parsed
+
+    try:
+        with open(file_path) as f:
+            lines = f.readlines()
+    except OSError as e:
+        logger.warning("Failed to read %s: %s", file_path, e)
+        return None
+
+    if not lines:
+        return None
+
+    cwd = None
+    git_branch = None
+    started_at = filename_started_at
+    last_active = filename_started_at
+    turn_count = 0
+
+    for line in lines:
+        record = _parse_jsonl_line(line.strip())
+        if not record:
+            continue
+
+        record_type = record.get("type")
+        timestamp = _parse_timestamp(record.get("timestamp"))
+
+        # Track last_active from any record with a timestamp
+        if timestamp and timestamp > last_active:
+            last_active = timestamp
+
+        payload = record.get("payload", {})
+
+        if record_type == "session_meta":
+            cwd = payload.get("cwd")
+            git_info = payload.get("git")
+            if git_info:
+                git_branch = git_info.get("branch")
+            # Use payload timestamp if available (more precise than filename)
+            meta_ts = _parse_timestamp(payload.get("timestamp"))
+            if meta_ts:
+                started_at = meta_ts
+
+        elif record_type == "event_msg":
+            payload_type = payload.get("type")
+            if payload_type in ("user_message", "agent_message"):
+                turn_count += 1
+
+    if cwd is None:
+        # No session_meta found; skip this file
+        return None
+
+    summary = session_index.get(session_id, "")
+    file_mtime = os.path.getmtime(file_path)
+
+    return Session(
+        id=session_id,
+        source="codex",
+        cwd=cwd,
+        repo_root=None,
+        repo_name=None,
+        git_branch=git_branch,
+        started_at=started_at,
+        last_active=last_active,
+        slug=None,
+        summary=summary,
+        status="",
+        turn_count=turn_count,
+        file_path=str(file_path),
+        file_mtime=file_mtime,
+    )
+
+
+def scan_codex_sessions(
+    since: datetime,
+    sessions_dir: Path | None = None,
+    index_path: Path | None = None,
+) -> list[Session]:
+    """Scan Codex session directories for JSONL session files.
+
+    Args:
+        since: Only include sessions with file mtime after this datetime.
+        sessions_dir: Override the default ~/.codex/sessions directory (for testing).
+        index_path: Override the default session_index.jsonl path (for testing).
+
+    Returns:
+        List of Session objects, one per session file found.
+    """
+    sessions_dir = sessions_dir or CODEX_SESSIONS_DIR
+
+    if not sessions_dir.exists():
+        logger.info("Codex sessions directory not found: %s", sessions_dir)
+        return []
+
+    session_index = load_codex_session_index(index_path)
+    since_ts = since.timestamp()
+    sessions: list[Session] = []
+
+    # Walk the YYYY/MM/DD directory structure for rollout-*.jsonl files
+    for jsonl_file in sessions_dir.rglob("rollout-*.jsonl"):
+        try:
+            mtime = os.path.getmtime(jsonl_file)
+        except OSError:
+            continue
+        if mtime < since_ts:
+            continue
+
+        session = _scan_single_codex_file(jsonl_file, session_index)
+        if session:
+            sessions.append(session)
 
     return sessions

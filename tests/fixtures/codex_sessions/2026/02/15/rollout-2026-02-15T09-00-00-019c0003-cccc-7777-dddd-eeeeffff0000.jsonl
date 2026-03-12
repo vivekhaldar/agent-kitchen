@@ -1,0 +1,5 @@
+{"timestamp":"2026-02-15T09:00:00.000Z","type":"session_meta","payload":{"id":"019c0003-cccc-7777-dddd-eeeeffff0000","timestamp":"2026-02-15T09:00:00.000Z","cwd":"/Users/test/other-project","originator":"codex_cli_rs","cli_version":"0.110.0","source":"cli","model_provider":"openai","git":{"commit_hash":"789abc","branch":"develop","repository_url":"https://github.com/test/other-project"}}}
+{"timestamp":"2026-02-15T09:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-003","model":"gpt-5.4","cwd":"/Users/test/other-project"}}
+{"timestamp":"2026-02-15T09:00:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"Refactor the database layer"}}
+{"timestamp":"2026-02-15T09:00:10.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Starting database refactor."}}
+{"timestamp":"2026-02-15T09:05:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-003"}}
