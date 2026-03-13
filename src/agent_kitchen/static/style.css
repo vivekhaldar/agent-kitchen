@@ -363,6 +363,21 @@ body {
   background: rgba(158, 206, 106, 0.15);
 }
 
+/* Show more button */
+
+.show-more-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--status-in-progress);
+  cursor: pointer;
+  transition: background var(--transition);
+  border-radius: var(--radius);
+}
+
+.show-more-btn:hover {
+  background: var(--bg-hover);
+}
+
 /* Non-repo separator */
 
 .non-repo-separator {

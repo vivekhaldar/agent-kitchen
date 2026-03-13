@@ -39,36 +39,33 @@ class TestArgParser:
 
 class TestRunCli:
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
     def test_opens_browser_by_default(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         run_cli(["--port", "8099"])
         mock_webbrowser.open.assert_called_once_with("http://localhost:8099")
 
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
     def test_no_open_skips_browser(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         run_cli(["--no-open"])
         mock_webbrowser.open.assert_not_called()
 
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
     def test_port_passed_to_uvicorn(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         run_cli(["--port", "9999"])
@@ -77,12 +74,11 @@ class TestRunCli:
         assert call_kwargs.kwargs["port"] == 9999
 
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
     def test_scan_days_applied_to_config(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         with patch("agent_kitchen.cli.config") as mock_config:
@@ -90,12 +86,11 @@ class TestRunCli:
             assert mock_config.SCAN_WINDOW_DAYS == 14
 
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
     def test_auth_failure_continues(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_setup_auth.side_effect = RuntimeError("No token")
         mock_create_app.return_value = MagicMock()
@@ -104,25 +99,24 @@ class TestRunCli:
         mock_uvicorn.run.assert_called_once()
 
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
-    def test_initial_scan_runs_before_server(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+    def test_server_starts_without_blocking_scan(
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         run_cli([])
-        # asyncio.run should be called (for initial scan) before uvicorn.run
-        mock_asyncio.run.assert_called_once()
+        # Server starts directly; initial scan runs via lifespan in the background
+        mock_uvicorn.run.assert_called_once()
+        mock_create_app.assert_called_once()
 
     @patch("agent_kitchen.cli.uvicorn")
-    @patch("agent_kitchen.cli.asyncio")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
     @patch("agent_kitchen.cli.webbrowser")
     def test_port_also_applied_to_config(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_asyncio, mock_uvicorn
+        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         with patch("agent_kitchen.cli.config") as mock_config:

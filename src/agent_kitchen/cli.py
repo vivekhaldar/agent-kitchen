@@ -2,14 +2,14 @@
 # ABOUTME: Parses --port, --scan-days, --no-open flags and starts the server.
 
 import argparse
-import asyncio
+import logging
 import webbrowser
 
 import uvicorn
 
 from agent_kitchen import config
 from agent_kitchen.config import setup_auth
-from agent_kitchen.server import create_app, run_scan_pipeline
+from agent_kitchen.server import create_app
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -48,6 +48,15 @@ def run_cli(argv: list[str] | None = None) -> None:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
+    # Configure logging for the whole package
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    # Suppress noisy Claude Agent SDK transport logs
+    logging.getLogger("claude_agent_sdk").setLevel(logging.WARNING)
+
     # Apply CLI overrides to config
     config.SCAN_WINDOW_DAYS = args.scan_days
     config.SERVER_PORT = args.port
@@ -62,26 +71,18 @@ def run_cli(argv: list[str] | None = None) -> None:
         print(f"Warning: {e}")
         print("LLM summarization will use fallback mode.")
 
-    # Create the app
+    # Create the app (initial scan runs in the background via lifespan)
     app = create_app()
 
-    # Run initial scan synchronously before starting the server
-    import agent_kitchen.server as server_module
-
-    async def initial_scan():
-        server_module._dashboard_data = await run_scan_pipeline()
-
-    asyncio.run(initial_scan())
-
     url = f"http://localhost:{args.port}"
-    print(f"Dashboard ready at {url}")
+    print(f"Dashboard starting at {url}")
 
     # Open browser unless --no-open
     if not args.no_open:
         webbrowser.open(url)
 
     # Start the server
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
 
 
 def main() -> None:

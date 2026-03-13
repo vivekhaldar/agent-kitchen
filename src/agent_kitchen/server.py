@@ -15,12 +15,13 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from agent_kitchen import config as _config
 from agent_kitchen.cache import SummaryCache
-from agent_kitchen.config import CACHE_DIR, REFRESH_INTERVAL_SECONDS, SCAN_WINDOW_DAYS
+from agent_kitchen.config import CACHE_DIR
 from agent_kitchen.git_status import get_repo_root
 from agent_kitchen.grouping import group_sessions
 from agent_kitchen.scanner import scan_claude_sessions, scan_codex_sessions
-from agent_kitchen.summarizer import batch_summarize
+from agent_kitchen.summarizer import _make_fallback, batch_summarize, extract_context_for_summary
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +56,10 @@ def _serialize_dashboard(data: dict) -> dict:
     }
 
 
-async def run_scan_pipeline() -> dict:
-    """Run the full scan → summarize → group pipeline.
-
-    Returns a dict with repo_groups, non_repo_groups, last_scanned, scan_duration_ms.
-    """
+def _scan_and_group() -> tuple[list, dict]:
+    """Scan sessions and group them (no LLM calls). Returns (all_sessions, dashboard_data)."""
     start = time.monotonic()
-    since = datetime.now(timezone.utc) - timedelta(days=SCAN_WINDOW_DAYS)
+    since = datetime.now(timezone.utc) - timedelta(days=_config.SCAN_WINDOW_DAYS)
 
     # Scan both sources (each scanner is independent — one failing shouldn't block the other)
     claude_sessions: list = []
@@ -84,10 +82,6 @@ async def run_scan_pipeline() -> dict:
         len(claude_sessions),
         len(codex_sessions),
     )
-    print(
-        f"Found {len(all_sessions)} sessions "
-        f"({len(claude_sessions)} Claude, {len(codex_sessions)} Codex)"
-    )
 
     # Resolve repo roots for sessions missing them
     for session in all_sessions:
@@ -97,20 +91,19 @@ async def run_scan_pipeline() -> dict:
                 session.repo_root = root
                 session.repo_name = os.path.basename(root)
 
-    # Summarize sessions that need it
+    # Apply cached summaries, or generate quick fallbacks from session content
     cache = SummaryCache(CACHE_DIR / "summaries.json")
-    needs_summary = [
-        s for s in all_sessions if not s.summary or cache.needs_refresh(s.id, s.file_mtime)
-    ]
-    if needs_summary:
-        print(f"Summarizing {len(needs_summary)} sessions...")
-        logger.info("Summarizing %d sessions", len(needs_summary))
-
-    results = await batch_summarize(all_sessions, cache)
-    for session, result in zip(all_sessions, results):
-        if result:
-            session.summary = result.summary
-            session.status = result.status
+    for session in all_sessions:
+        cached = cache.get(session.id)
+        if cached:
+            session.summary = cached["summary"]
+            session.status = cached["status"]
+        elif not session.summary:
+            context = extract_context_for_summary(session.file_path, session.source)
+            if context:
+                fallback = _make_fallback(context)
+                session.summary = fallback.summary
+                session.status = fallback.status
 
     # Group by repo
     try:
@@ -121,12 +114,60 @@ async def run_scan_pipeline() -> dict:
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
 
+    data = {
+        "repo_groups": repo_groups,
+        "non_repo_groups": non_repo_groups,
+        "last_scanned": datetime.now(timezone.utc).isoformat(),
+        "scan_duration_ms": elapsed_ms,
+    }
+    return all_sessions, data
+
+
+async def _summarize_and_regroup(all_sessions: list) -> dict:
+    """Run LLM summarization on sessions that need it, then regroup."""
+    start = time.monotonic()
+    cache = SummaryCache(CACHE_DIR / "summaries.json")
+    needs_summary = [
+        s for s in all_sessions if not s.summary or cache.needs_refresh(s.id, s.file_mtime)
+    ]
+    if not needs_summary:
+        logger.info("All sessions already have cached summaries")
+        return _scan_and_group()[1]
+
+    logger.info("Summarizing %d sessions via LLM", len(needs_summary))
+
+    results = await batch_summarize(all_sessions, cache)
+    for session, result in zip(all_sessions, results):
+        if result:
+            session.summary = result.summary
+            session.status = result.status
+
+    # Regroup with updated summaries
+    try:
+        repo_groups, non_repo_groups = group_sessions(all_sessions)
+    except Exception:
+        logger.exception("Session grouping failed")
+        repo_groups, non_repo_groups = [], []
+
+    elapsed_ms = int((time.monotonic() - start) * 1000)
+    logger.info("Summarization complete in %dms", elapsed_ms)
+
     return {
         "repo_groups": repo_groups,
         "non_repo_groups": non_repo_groups,
         "last_scanned": datetime.now(timezone.utc).isoformat(),
         "scan_duration_ms": elapsed_ms,
     }
+
+
+async def run_scan_pipeline() -> dict:
+    """Run the full scan → summarize → group pipeline.
+
+    Returns a dict with repo_groups, non_repo_groups, last_scanned, scan_duration_ms.
+    """
+    all_sessions, data = _scan_and_group()
+    data = await _summarize_and_regroup(all_sessions)
+    return data
 
 
 def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
@@ -147,7 +188,7 @@ def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
     subprocess.run(["osascript", "-e", applescript], check=True)
 
 
-async def _background_refresh_loop(interval: int = REFRESH_INTERVAL_SECONDS) -> None:
+async def _background_refresh_loop(interval: int = _config.REFRESH_INTERVAL_SECONDS) -> None:
     """Periodically re-run the scan pipeline and swap in-memory data atomically."""
     global _dashboard_data
     while True:
@@ -161,11 +202,34 @@ async def _background_refresh_loop(interval: int = REFRESH_INTERVAL_SECONDS) -> 
             logger.exception("Background refresh failed")
 
 
+async def _initial_scan_then_refresh() -> None:
+    """Run a fast scan immediately, then summarize, then enter periodic refresh."""
+    global _dashboard_data
+    try:
+        logger.info("Initial scan starting (fast, no LLM)")
+        all_sessions, data = _scan_and_group()
+        _dashboard_data = data
+        logger.info(
+            "Initial scan complete — dashboard ready with %d sessions",
+            sum(len(g.sessions) for g in data["repo_groups"])
+            + sum(len(g.sessions) for g in data["non_repo_groups"]),
+        )
+
+        # Run LLM summarization in the background and update data when done
+        logger.info("Starting background LLM summarization")
+        summarized_data = await _summarize_and_regroup(all_sessions)
+        _dashboard_data = summarized_data
+        logger.info("Background summarization complete")
+    except Exception:
+        logger.exception("Initial scan failed")
+    await _background_refresh_loop()
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Start background refresh on startup, cancel on shutdown."""
+    """Start initial scan + background refresh on startup, cancel on shutdown."""
     global _refresh_task
-    _refresh_task = asyncio.create_task(_background_refresh_loop())
+    _refresh_task = asyncio.create_task(_initial_scan_then_refresh())
     yield
     _refresh_task.cancel()
     try:

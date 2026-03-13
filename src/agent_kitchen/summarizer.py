@@ -210,7 +210,12 @@ class SummarizeResult:
 
 async def _call_llm(prompt: str) -> str:
     """Call Claude Haiku via the Agent SDK and return the text response."""
+    import os
+
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+
+    # Allow running inside a Claude Code session (the SDK refuses nested sessions)
+    os.environ.pop("CLAUDECODE", None)
 
     result_text = ""
     async for msg in query(

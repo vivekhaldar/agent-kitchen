@@ -2,9 +2,12 @@
 # ABOUTME: Uses file mtime for invalidation and atomic writes for safety.
 
 import json
+import logging
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SummaryCache:
@@ -14,6 +17,7 @@ class SummaryCache:
         self.cache_path = cache_path
         self.entries: dict[str, dict] = {}
         self._load()
+        logger.info("Cache loaded: %d entries from %s", len(self.entries), self.cache_path)
 
     def _load(self) -> None:
         if not self.cache_path.exists():
@@ -22,7 +26,8 @@ class SummaryCache:
             with open(self.cache_path) as f:
                 data = json.load(f)
             self.entries = data.get("entries", {})
-        except (json.JSONDecodeError, KeyError, OSError):
+        except (json.JSONDecodeError, KeyError, OSError) as e:
+            logger.warning("Failed to load cache from %s: %s", self.cache_path, e)
             self.entries = {}
 
     def save(self) -> None:

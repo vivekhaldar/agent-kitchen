@@ -29,7 +29,7 @@ def test_haiku_model():
 
 
 def test_summary_concurrency():
-    assert config_module.SUMMARY_CONCURRENCY == 10
+    assert config_module.SUMMARY_CONCURRENCY == 3
 
 
 def test_claude_projects_dir():

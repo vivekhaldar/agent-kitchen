@@ -1,11 +1,14 @@
 # ABOUTME: Groups sessions by git repository or working directory.
 # ABOUTME: Attaches live git status to each repo group and sorts by recent activity.
 
+import logging
 import os
 from collections import defaultdict
 
 from agent_kitchen.git_status import get_git_status
 from agent_kitchen.models import NonRepoGroup, RepoGroup, Session
+
+logger = logging.getLogger(__name__)
 
 
 def group_sessions(
@@ -54,6 +57,7 @@ def group_sessions(
         )
 
     repo_groups.sort(key=lambda g: g.last_active, reverse=True)
+    logger.info("Grouped %d sessions into %d repo groups", len(sessions), len(repo_groups))
 
     # Build NonRepoGroups
     non_repo_groups: list[NonRepoGroup] = []

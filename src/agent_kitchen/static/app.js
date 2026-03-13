@@ -44,10 +44,18 @@
     return ["in progress", "likely in progress", "waiting for input"].includes(status);
   }
 
+  var INITIAL_VISIBLE = 10;
+
   function escapeHtml(str) {
     const div = document.createElement("div");
     div.textContent = str || "";
     return div.innerHTML;
+  }
+
+  function sessionLabel(session) {
+    if (session.summary) return session.summary;
+    if (session.slug) return session.slug;
+    return session.id.substring(0, 8) + "\u2026";
   }
 
   function filterSessions(sessions) {
@@ -63,7 +71,7 @@
     row.className = "session-row";
     row.innerHTML =
       '<div class="status-dot ' + cssCls + '"></div>' +
-      '<div class="session-summary">' + escapeHtml(session.summary || session.slug || session.id) + "</div>" +
+      '<div class="session-summary">' + escapeHtml(sessionLabel(session)) + "</div>" +
       '<span class="status-label ' + cssCls + '">' + escapeHtml(session.status) + "</span>" +
       '<span class="time-ago">' + timeAgo(session.last_active) + "</span>" +
       '<span class="source-badge ' + session.source + '">' + session.source + "</span>";
@@ -86,9 +94,10 @@
     // Git meta string
     var metaParts = [];
     if (group.git_branch) metaParts.push(group.git_branch);
-    if (group.git_dirty) metaParts.push('<span class="dirty">' + (group.sessions ? "dirty" : "dirty") + "</span>");
+    if (group.git_dirty) metaParts.push('<span class="dirty">dirty</span>');
     if (group.unpushed_commits > 0) metaParts.push('<span class="unpushed">' + group.unpushed_commits + " unpushed</span>");
     if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push("clean");
+    metaParts.push(filtered.length + " sessions");
 
     var header = document.createElement("div");
     header.className = "repo-header";
@@ -103,9 +112,29 @@
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
-    filtered.forEach(function (session) {
-      sessionList.appendChild(renderSessionRow(session));
-    });
+    var visibleCount = INITIAL_VISIBLE;
+    var showingAll = filtered.length <= INITIAL_VISIBLE;
+
+    function renderVisibleSessions() {
+      sessionList.innerHTML = "";
+      var toShow = showingAll ? filtered : filtered.slice(0, visibleCount);
+      toShow.forEach(function (session) {
+        sessionList.appendChild(renderSessionRow(session));
+      });
+      if (!showingAll) {
+        var moreBtn = document.createElement("div");
+        moreBtn.className = "show-more-btn";
+        moreBtn.textContent = "Show all " + filtered.length + " sessions";
+        moreBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          showingAll = true;
+          renderVisibleSessions();
+          sessionList.style.maxHeight = sessionList.scrollHeight + "px";
+        });
+        sessionList.appendChild(moreBtn);
+      }
+    }
+    renderVisibleSessions();
 
     header.addEventListener("click", function () {
       if (expandedRepos.has(group.repo_root)) {
@@ -156,9 +185,28 @@
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
-    filtered.forEach(function (session) {
-      sessionList.appendChild(renderSessionRow(session));
-    });
+    var showingAll = filtered.length <= INITIAL_VISIBLE;
+
+    function renderVisibleSessions() {
+      sessionList.innerHTML = "";
+      var toShow = showingAll ? filtered : filtered.slice(0, INITIAL_VISIBLE);
+      toShow.forEach(function (session) {
+        sessionList.appendChild(renderSessionRow(session));
+      });
+      if (!showingAll) {
+        var moreBtn = document.createElement("div");
+        moreBtn.className = "show-more-btn";
+        moreBtn.textContent = "Show all " + filtered.length + " sessions";
+        moreBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          showingAll = true;
+          renderVisibleSessions();
+          sessionList.style.maxHeight = sessionList.scrollHeight + "px";
+        });
+        sessionList.appendChild(moreBtn);
+      }
+    }
+    renderVisibleSessions();
 
     header.addEventListener("click", function () {
       if (expandedRepos.has(group.cwd)) {
@@ -205,9 +253,24 @@
       return;
     }
 
-    allSessions.forEach(function (session) {
+    var chronoLimit = 50;
+    var chronoShowAll = allSessions.length <= chronoLimit;
+    var toShow = chronoShowAll ? allSessions : allSessions.slice(0, chronoLimit);
+    toShow.forEach(function (session) {
       $chronoView.appendChild(renderSessionRow(session));
     });
+    if (!chronoShowAll) {
+      var moreBtn = document.createElement("div");
+      moreBtn.className = "show-more-btn";
+      moreBtn.textContent = "Show all " + allSessions.length + " sessions";
+      moreBtn.addEventListener("click", function () {
+        $chronoView.innerHTML = "";
+        allSessions.forEach(function (session) {
+          $chronoView.appendChild(renderSessionRow(session));
+        });
+      });
+      $chronoView.appendChild(moreBtn);
+    }
   }
 
   function render() {
@@ -246,15 +309,18 @@
 
       $nonRepoGroups.innerHTML = "";
       if (hasNonRepos) {
-        var sep = document.createElement("div");
-        sep.className = "non-repo-separator";
-        sep.textContent = "\u2014 Sessions outside git repos \u2014";
-        $nonRepoGroups.appendChild(sep);
-
+        var nonRepoEls = [];
         dashboardData.non_repo_groups.forEach(function (group) {
           var el = renderNonRepoGroup(group);
-          if (el) $nonRepoGroups.appendChild(el);
+          if (el) nonRepoEls.push(el);
         });
+        if (nonRepoEls.length > 0) {
+          var sep = document.createElement("div");
+          sep.className = "non-repo-separator";
+          sep.textContent = "\u2014 Sessions outside git repos \u2014";
+          $nonRepoGroups.appendChild(sep);
+          nonRepoEls.forEach(function (el) { $nonRepoGroups.appendChild(el); });
+        }
       }
     } else {
       $repoGroups.classList.add("hidden");
