@@ -3,18 +3,21 @@
 
 import asyncio
 import dataclasses
+import json
 import logging
 import os
 import shlex
 import subprocess
 import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from ptyprocess import PtyProcess
 
 from agent_kitchen import config as _config
 from agent_kitchen.cache import SummaryCache
@@ -31,6 +34,33 @@ _dashboard_data: dict | None = None
 
 # Background refresh task handle, stored for cancellation on shutdown
 _refresh_task: asyncio.Task | None = None
+
+# Active PTY processes keyed by terminal ID
+_terminals: dict[str, PtyProcess] = {}
+
+
+def _spawn_pty(
+    source: str, session_id: str, cwd: str, cols: int = 120, rows: int = 30
+) -> tuple[str, PtyProcess]:
+    """Spawn a PTY running the resume command for a session."""
+    if source == "claude":
+        shell_cmd = f"unset CLAUDECODE && claude --resume {shlex.quote(session_id)}"
+    elif source == "codex":
+        shell_cmd = f"codex resume {shlex.quote(session_id)}"
+    else:
+        raise ValueError(f"Unknown source: {source}")
+
+    env = {**os.environ, "TERM": "xterm-256color"}
+    env.pop("CLAUDECODE", None)
+    pty = PtyProcess.spawn(
+        ["/bin/zsh", "-c", shell_cmd],
+        cwd=cwd,
+        dimensions=(rows, cols),
+        env=env,
+    )
+    tid = uuid.uuid4().hex[:12]
+    _terminals[tid] = pty
+    return tid, pty
 
 
 def _serialize_dashboard(data: dict) -> dict:
@@ -335,6 +365,71 @@ def create_app(*, enable_background_refresh: bool = True, summarize: bool = True
                 status_code=500,
                 content={"error": f"Failed to launch terminal: {e}"},
             )
+
+    @app.websocket("/ws/terminal")
+    async def terminal_ws(ws: WebSocket):
+        source = ws.query_params.get("source", "")
+        session_id = ws.query_params.get("session_id", "")
+        cwd = ws.query_params.get("cwd", "")
+        if source not in ("claude", "codex") or not session_id or not cwd:
+            await ws.close(code=1008, reason="Missing or invalid query params")
+            return
+
+        await ws.accept()
+        logger.info("Terminal WS accepted: source=%s session=%s cwd=%s", source, session_id, cwd)
+
+        try:
+            tid, pty = _spawn_pty(source, session_id, cwd)
+        except Exception:
+            logger.exception("Failed to spawn PTY")
+            await ws.close(code=1011, reason="PTY spawn failed")
+            return
+
+        logger.info("PTY spawned: tid=%s pid=%d", tid, pty.pid)
+        reader_task = None
+
+        try:
+            # PTY → WebSocket: read in a thread to avoid blocking the event loop
+            async def pty_reader():
+                loop = asyncio.get_event_loop()
+                while True:
+                    try:
+                        data = await loop.run_in_executor(
+                            None, lambda: pty.read(4096).decode("utf-8", errors="replace")
+                        )
+                        await ws.send_text(data)
+                    except EOFError:
+                        logger.info("PTY EOF for tid=%s", tid)
+                        await ws.close()
+                        break
+                    except Exception:
+                        logger.exception("PTY reader error for tid=%s", tid)
+                        break
+
+            reader_task = asyncio.create_task(pty_reader())
+
+            # WebSocket → PTY: forward keystrokes, handle resize messages
+            while True:
+                text = await ws.receive_text()
+                if text.startswith('{"type":"resize"'):
+                    try:
+                        msg = json.loads(text)
+                        pty.setwinsize(msg["rows"], msg["cols"])
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+                else:
+                    pty.write(text.encode("utf-8"))
+        except WebSocketDisconnect:
+            logger.info("WebSocket disconnected for tid=%s", tid)
+        except Exception:
+            logger.exception("Terminal WS error for tid=%s", tid)
+        finally:
+            if reader_task:
+                reader_task.cancel()
+            if pty.isalive():
+                pty.terminate(force=True)
+            _terminals.pop(tid, None)
+            logger.info("Terminal cleanup done for tid=%s", tid)
 
     # Mount static files (serve index.html at root)
     static_dir = Path(__file__).parent / "static"

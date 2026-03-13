@@ -320,26 +320,109 @@
   }
 
   function launchSession(session, rowEl) {
+    rowEl.classList.add("launched");
+    setTimeout(function () { rowEl.classList.remove("launched"); }, 500);
+    openTerminal(session);
+  }
+
+  // --- Terminal ---
+
+  var activeTerminal = null; // { term, ws, fitAddon }
+  var $terminalPanel = document.getElementById("terminal-panel");
+  var $terminalContainer = document.getElementById("terminal-container");
+  var $terminalTitle = document.getElementById("terminal-title");
+  var $terminalClose = document.getElementById("terminal-close");
+
+  function openTerminal(session) {
+    closeTerminal();
+
+    $terminalPanel.classList.remove("hidden");
+    document.body.classList.add("terminal-open");
+
+    var term = new Terminal({
+      fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+      fontSize: 13,
+      theme: {
+        background: "#111111",
+        foreground: "#FAFAFA",
+        cursor: "#FF4D00",
+      },
+      cursorBlink: true,
+    });
+
+    var fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+    term.open($terminalContainer);
+    fitAddon.fit();
+
     var params = new URLSearchParams({
       source: session.source,
       session_id: session.id,
       cwd: session.cwd,
     });
+    var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    var wsUrl = wsProtocol + "//" + location.host + "/ws/terminal?" + params.toString();
+    var ws = new WebSocket(wsUrl);
 
-    rowEl.classList.add("launched");
-    setTimeout(function () { rowEl.classList.remove("launched"); }, 500);
+    ws.onopen = function () {
+      ws.send(JSON.stringify({
+        type: "resize",
+        cols: term.cols,
+        rows: term.rows,
+      }));
+      term.focus();
+    };
 
-    fetch("/api/launch?" + params.toString())
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data.error) {
-          console.error("Launch failed:", data.error);
-        }
-      })
-      .catch(function (err) {
-        console.error("Launch request failed:", err);
-      });
+    ws.onmessage = function (evt) {
+      term.write(evt.data);
+    };
+
+    ws.onclose = function () {
+      term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+    };
+
+    term.onData(function (data) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    term.onResize(function (size) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "resize",
+          cols: size.cols,
+          rows: size.rows,
+        }));
+      }
+    });
+
+    window.addEventListener("resize", handleTerminalResize);
+
+    $terminalTitle.textContent = sessionLabel(session);
+    activeTerminal = { term: term, ws: ws, fitAddon: fitAddon };
   }
+
+  function handleTerminalResize() {
+    if (activeTerminal) {
+      activeTerminal.fitAddon.fit();
+    }
+  }
+
+  function closeTerminal() {
+    if (!activeTerminal) return;
+    activeTerminal.ws.close();
+    activeTerminal.term.dispose();
+    activeTerminal = null;
+    $terminalPanel.classList.add("hidden");
+    document.body.classList.remove("terminal-open");
+    $terminalContainer.innerHTML = "";
+    window.removeEventListener("resize", handleTerminalResize);
+  }
+
+  $terminalClose.addEventListener("click", closeTerminal);
 
   // --- Last scan timer ---
 

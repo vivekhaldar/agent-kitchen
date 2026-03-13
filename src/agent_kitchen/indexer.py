@@ -1,14 +1,12 @@
-# ABOUTME: CLI tool to pre-index and LLM-summarize all Claude/Codex sessions.
-# ABOUTME: Populates the summary cache so agent-kitchen dashboard loads instantly.
+# ABOUTME: Pre-indexes and LLM-summarizes all Claude/Codex sessions.
+# ABOUTME: Populates the summary cache so the dashboard loads instantly.
 
-import argparse
 import asyncio
 import logging
 import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from agent_kitchen import config
 from agent_kitchen.cache import SummaryCache
 from agent_kitchen.config import CACHE_DIR, setup_auth
 from agent_kitchen.scanner import scan_claude_sessions, scan_codex_sessions
@@ -19,36 +17,6 @@ from agent_kitchen.summarizer import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="agent-kitchen-index",
-        description="Pre-index and summarize AI coding agent sessions for the dashboard.",
-    )
-    parser.add_argument(
-        "--scan-days",
-        type=int,
-        default=config.SCAN_WINDOW_DAYS,
-        help=f"Days of history to scan (default: {config.SCAN_WINDOW_DAYS})",
-    )
-    parser.add_argument(
-        "--concurrency",
-        type=int,
-        default=config.SUMMARY_CONCURRENCY,
-        help=f"Max concurrent LLM calls (default: {config.SUMMARY_CONCURRENCY})",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Scan and report what would be indexed, but skip LLM calls",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Re-summarize all sessions, ignoring cache",
-    )
-    return parser
 
 
 async def run_indexer(
@@ -185,29 +153,3 @@ async def run_indexer(
         cache_path,
         len(cache.entries),
     )
-
-
-def main() -> None:
-    parser = build_arg_parser()
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stderr,
-    )
-    logging.getLogger("claude_agent_sdk").setLevel(logging.WARNING)
-
-    asyncio.run(
-        run_indexer(
-            scan_days=args.scan_days,
-            concurrency=args.concurrency,
-            dry_run=args.dry_run,
-            force=args.force,
-        )
-    )
-
-
-if __name__ == "__main__":
-    main()
