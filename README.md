@@ -4,7 +4,7 @@ A locally-running web dashboard that gives you a unified view of all your AI cod
 
 ## What it does
 
-- Scans `~/.claude` and `~/.codex` for session data
+- Scans `~/.claude` and `~/.codex` for interactive session data (filters out programmatic SDK calls)
 - Uses Claude Haiku to generate one-line summaries and classify session status
 - Groups sessions by git repo, sorted by most recent activity
 - Shows live git status (branch, dirty files, unpushed commits) per repo
@@ -39,6 +39,9 @@ agent-kitchen --scan-days 90
 
 # Don't auto-open the browser
 agent-kitchen --no-open
+
+# Use cached summaries only (no LLM calls, no background refresh)
+agent-kitchen --no-summarize
 ```
 
 The dashboard runs at `http://localhost:8099` by default.
@@ -100,6 +103,17 @@ uv run pytest
 uvx ruff check --fix .
 uvx ruff format .
 ```
+
+## Session filtering
+
+Only interactive sessions are shown. The scanner filters out:
+
+- **Programmatic SDK sessions** — single-shot calls with ≤1 user turn (e.g., email classification, automated summarization). These are created by the Claude Agent SDK but aren't interactive coding sessions.
+- **Subagent sessions** — child sessions spawned by the Agent tool, stored in `subagents/` subdirectories.
+
+Context compaction (when a session's context window fills up) does NOT create a new session — the same file continues to be used. However, `claude --continue` / `claude --resume` creates a new independent session file with no linking metadata.
+
+See [docs/session-formats.md](docs/session-formats.md) for details on session file formats and filtering logic.
 
 ## Requirements
 
