@@ -762,10 +762,10 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Test on a clean environment (fresh venv, no prior cache).
 - [x] Move static files into package so they're included in the wheel.
 
-**Task 6.3: GitHub repo setup**
-- Create private repo on GitHub.
-- Add `.gitignore` (Python, __pycache__, .cache, etc.).
-- Push initial code.
+**Task 6.3: GitHub repo setup** [DONE]
+- [x] Create private repo on GitHub.
+- [x] Add `.gitignore` (Python, __pycache__, .cache, etc.).
+- [x] Push initial code.
 
 ---
 
