@@ -222,7 +222,7 @@ class TestLaunch:
             )
             call_args = mock_run.call_args[0][0]
             cmd = call_args[-1]
-            assert "claude --resume abc-123" in cmd
+            assert "claude --dangerously-skip-permissions --resume abc-123" in cmd
             assert "cd /Users/test/repos/proj" in cmd
             assert "unset CLAUDECODE" in cmd
 

@@ -59,13 +59,16 @@ def _spawn_pty(
     """
     if session_id:
         if source == "claude":
-            shell_cmd = f"unset CLAUDECODE && claude --resume {shlex.quote(session_id)}"
+            resume_id = shlex.quote(session_id)
+            shell_cmd = (
+                f"unset CLAUDECODE && claude --dangerously-skip-permissions --resume {resume_id}"
+            )
         elif source == "codex":
             shell_cmd = f"codex resume {shlex.quote(session_id)}"
         else:
             raise ValueError(f"Unknown source: {source}")
     else:
-        shell_cmd = "unset CLAUDECODE && claude"
+        shell_cmd = "unset CLAUDECODE && claude --dangerously-skip-permissions"
 
     env = {**os.environ, "TERM": "xterm-256color"}
     env.pop("CLAUDECODE", None)
@@ -221,7 +224,10 @@ async def run_scan_pipeline() -> dict:
 def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
     """Open a new terminal window with the resume command for a session."""
     if source == "claude":
-        cmd = f"cd {cwd} && unset CLAUDECODE && claude --resume {session_id}"
+        cmd = (
+            f"cd {cwd} && unset CLAUDECODE"
+            f" && claude --dangerously-skip-permissions --resume {session_id}"
+        )
     elif source == "codex":
         cmd = f"cd {cwd} && codex resume {session_id}"
     else:
