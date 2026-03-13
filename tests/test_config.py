@@ -32,6 +32,10 @@ def test_summary_concurrency():
     assert config_module.SUMMARY_CONCURRENCY == 3
 
 
+def test_terminal_app_default():
+    assert config_module.TERMINAL_APP == "ghostty"
+
+
 def test_claude_projects_dir():
     assert isinstance(config_module.CLAUDE_PROJECTS_DIR, Path)
     assert str(config_module.CLAUDE_PROJECTS_DIR).endswith(".claude/projects")

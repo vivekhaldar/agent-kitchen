@@ -194,9 +194,6 @@ class TestLaunch:
             assert resp.status_code == 200
             assert resp.json()["ok"] is True
             mock_run.assert_called_once()
-            # Verify osascript was called
-            call_args = mock_run.call_args
-            assert call_args[0][0][0] == "osascript"
 
     def test_launch_codex_session(self, client):
         with patch("subprocess.run") as mock_run:
@@ -223,9 +220,11 @@ class TestLaunch:
                     "cwd": "/Users/test/repos/proj",
                 },
             )
-            applescript = mock_run.call_args[0][0][2]
-            assert "claude --continue --session-id abc-123" in applescript
-            assert "cd /Users/test/repos/proj" in applescript
+            call_args = mock_run.call_args[0][0]
+            cmd = call_args[-1]
+            assert "claude --continue --session-id abc-123" in cmd
+            assert "cd /Users/test/repos/proj" in cmd
+            assert "unset CLAUDECODE" in cmd
 
     def test_launch_codex_uses_correct_command(self, client):
         with patch("subprocess.run") as mock_run:
@@ -238,9 +237,44 @@ class TestLaunch:
                     "cwd": "/Users/test/repos/proj",
                 },
             )
-            applescript = mock_run.call_args[0][0][2]
-            assert "codex resume ulid-456" in applescript
-            assert "cd /Users/test/repos/proj" in applescript
+            call_args = mock_run.call_args[0][0]
+            cmd = call_args[-1]
+            assert "codex resume ulid-456" in cmd
+            assert "cd /Users/test/repos/proj" in cmd
+
+    def test_launch_uses_ghostty_by_default(self, client):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            client.get(
+                "/api/launch",
+                params={
+                    "source": "claude",
+                    "session_id": "abc-123",
+                    "cwd": "/tmp",
+                },
+            )
+            call_args = mock_run.call_args[0][0]
+            assert call_args[0] == "open"
+            assert "-a" in call_args
+            assert "Ghostty" in call_args
+
+    def test_launch_uses_terminal_app_when_configured(self, client):
+        with (
+            patch("agent_kitchen.server._config") as mock_config,
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_config.TERMINAL_APP = "terminal"
+            mock_run.return_value = MagicMock(returncode=0)
+            client.get(
+                "/api/launch",
+                params={
+                    "source": "claude",
+                    "session_id": "abc-123",
+                    "cwd": "/tmp",
+                },
+            )
+            call_args = mock_run.call_args[0][0]
+            assert call_args[0] == "osascript"
 
     def test_launch_missing_params_returns_422(self, client):
         resp = client.get("/api/launch")

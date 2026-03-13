@@ -12,6 +12,7 @@ SCAN_WINDOW_DAYS = int(os.environ.get("AGENT_KITCHEN_SCAN_DAYS", "60"))
 CACHE_DIR = Path(os.environ.get("AGENT_KITCHEN_CACHE_DIR", "~/.cache/agent-kitchen")).expanduser()
 REFRESH_INTERVAL_SECONDS = int(os.environ.get("AGENT_KITCHEN_REFRESH_INTERVAL", "60"))
 SERVER_PORT = int(os.environ.get("AGENT_KITCHEN_PORT", "8099"))
+TERMINAL_APP = os.environ.get("AGENT_KITCHEN_TERMINAL", "ghostty")
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 SUMMARY_CONCURRENCY = 3
 

@@ -171,21 +171,33 @@ async def run_scan_pipeline() -> dict:
 
 
 def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
-    """Open a new Terminal.app window with the resume command for a session."""
+    """Open a new terminal window with the resume command for a session."""
     if source == "claude":
-        cmd = f"cd {cwd} && claude --continue --session-id {session_id}"
+        cmd = f"cd {cwd} && unset CLAUDECODE && claude --continue --session-id {session_id}"
     elif source == "codex":
         cmd = f"cd {cwd} && codex resume {session_id}"
     else:
         raise ValueError(f"Unknown source: {source}")
 
-    applescript = f'''
-    tell application "Terminal"
-        activate
-        do script "{cmd}"
-    end tell
-    '''
-    subprocess.run(["osascript", "-e", applescript], check=True)
+    terminal = _config.TERMINAL_APP.lower()
+    if terminal == "ghostty":
+        subprocess.run(
+            ["open", "-a", "Ghostty", "--args", "-e", cmd],
+            check=True,
+        )
+    elif terminal == "terminal":
+        applescript = f'''
+        tell application "Terminal"
+            activate
+            do script "{cmd}"
+        end tell
+        '''
+        subprocess.run(["osascript", "-e", applescript], check=True)
+    else:
+        raise ValueError(
+            f"Unknown terminal app: {_config.TERMINAL_APP}. "
+            "Set AGENT_KITCHEN_TERMINAL to 'ghostty' or 'terminal'."
+        )
 
 
 async def _background_refresh_loop(interval: int = _config.REFRESH_INTERVAL_SECONDS) -> None:
