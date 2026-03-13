@@ -55,32 +55,25 @@ class TestRunCli:
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
-    def test_opens_browser_by_default(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
-    ):
+    def test_passes_browser_url_by_default(self, mock_create_app, mock_setup_auth, mock_uvicorn):
         mock_create_app.return_value = MagicMock()
         run_cli(["web", "--port", "8099"])
-        mock_webbrowser.open.assert_called_once_with("http://localhost:8099")
+        mock_create_app.assert_called_once_with(
+            summarize=False, open_browser="http://localhost:8099"
+        )
 
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
-    def test_no_open_skips_browser(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
-    ):
+    def test_no_open_skips_browser(self, mock_create_app, mock_setup_auth, mock_uvicorn):
         mock_create_app.return_value = MagicMock()
         run_cli(["web", "--no-open"])
-        mock_webbrowser.open.assert_not_called()
+        mock_create_app.assert_called_once_with(summarize=False, open_browser=None)
 
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
-    def test_port_passed_to_uvicorn(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
-    ):
+    def test_port_passed_to_uvicorn(self, mock_create_app, mock_setup_auth, mock_uvicorn):
         mock_create_app.return_value = MagicMock()
         run_cli(["web", "--port", "9999"])
         mock_uvicorn.run.assert_called_once()
@@ -90,10 +83,7 @@ class TestRunCli:
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
-    def test_scan_days_applied_to_config(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
-    ):
+    def test_scan_days_applied_to_config(self, mock_create_app, mock_setup_auth, mock_uvicorn):
         mock_create_app.return_value = MagicMock()
         with patch("agent_kitchen.cli.config") as mock_config:
             run_cli(["web", "--scan-days", "14"])
@@ -102,10 +92,7 @@ class TestRunCli:
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
-    def test_auth_failure_continues(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
-    ):
+    def test_auth_failure_continues(self, mock_create_app, mock_setup_auth, mock_uvicorn):
         mock_setup_auth.side_effect = RuntimeError("No token")
         mock_create_app.return_value = MagicMock()
         # Should not raise — auth failure is non-fatal (only called with --summarize)
@@ -115,9 +102,8 @@ class TestRunCli:
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
     def test_server_starts_without_blocking_scan(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
+        self, mock_create_app, mock_setup_auth, mock_uvicorn
     ):
         mock_create_app.return_value = MagicMock()
         run_cli(["web"])
@@ -127,10 +113,7 @@ class TestRunCli:
     @patch("agent_kitchen.cli.uvicorn")
     @patch("agent_kitchen.cli.setup_auth")
     @patch("agent_kitchen.cli.create_app")
-    @patch("agent_kitchen.cli.webbrowser")
-    def test_port_also_applied_to_config(
-        self, mock_webbrowser, mock_create_app, mock_setup_auth, mock_uvicorn
-    ):
+    def test_port_also_applied_to_config(self, mock_create_app, mock_setup_auth, mock_uvicorn):
         mock_create_app.return_value = MagicMock()
         with patch("agent_kitchen.cli.config") as mock_config:
             run_cli(["web", "--port", "7777"])

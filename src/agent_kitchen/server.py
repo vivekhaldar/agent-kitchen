@@ -10,6 +10,7 @@ import shlex
 import subprocess
 import time
 import uuid
+import webbrowser
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -37,6 +38,16 @@ _refresh_task: asyncio.Task | None = None
 
 # Active PTY processes keyed by terminal ID
 _terminals: dict[str, PtyProcess] = {}
+
+# URL to open in browser after server is ready (set by create_app)
+_open_browser_url: str | None = None
+
+
+async def _open_browser_when_ready():
+    """Open the browser after a brief delay to let uvicorn start accepting connections."""
+    if _open_browser_url:
+        await asyncio.sleep(0.5)
+        webbrowser.open(_open_browser_url)
 
 
 def _spawn_pty(
@@ -276,6 +287,7 @@ async def _lifespan(app: FastAPI):
     """Start initial scan + background refresh on startup, cancel on shutdown."""
     global _refresh_task
     _refresh_task = asyncio.create_task(_initial_scan_then_refresh())
+    asyncio.create_task(_open_browser_when_ready())
     yield
     _refresh_task.cancel()
     try:
@@ -300,10 +312,16 @@ async def _scan_only_lifespan(app: FastAPI):
         )
     except Exception:
         logger.exception("Scan-only startup failed")
+    asyncio.create_task(_open_browser_when_ready())
     yield
 
 
-def create_app(*, enable_background_refresh: bool = True, summarize: bool = True) -> FastAPI:
+def create_app(
+    *,
+    enable_background_refresh: bool = True,
+    summarize: bool = True,
+    open_browser: str | None = None,
+) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
@@ -311,7 +329,10 @@ def create_app(*, enable_background_refresh: bool = True, summarize: bool = True
             Set to False in tests to avoid background tasks.
         summarize: If False, skip LLM summarization and background refresh.
             Uses cached summaries and fallbacks only.
+        open_browser: If set, open this URL in the browser once the server is ready.
     """
+    global _open_browser_url
+    _open_browser_url = open_browser
     if not enable_background_refresh:
         lifespan = None
     elif not summarize:

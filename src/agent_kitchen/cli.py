@@ -5,7 +5,6 @@ import argparse
 import asyncio
 import logging
 import sys
-import webbrowser
 
 import uvicorn
 
@@ -99,13 +98,11 @@ def _run_web(args: argparse.Namespace) -> None:
             print(f"Warning: {e}")
             print("LLM summarization will use fallback mode.")
 
-    app = create_app(summarize=args.summarize)
-
     url = f"http://localhost:{args.port}"
-    print(f"Dashboard starting at {url}")
+    open_url = url if not args.no_open else None
+    app = create_app(summarize=args.summarize, open_browser=open_url)
 
-    if not args.no_open:
-        webbrowser.open(url)
+    print(f"Dashboard starting at {url}")
 
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
 
