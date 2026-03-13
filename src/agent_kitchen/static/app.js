@@ -356,13 +356,4 @@
   // --- Init ---
 
   fetchSessions();
-
-  // Auto-refresh every 30 seconds
-  setInterval(function () {
-    fetchSessions();
-    updateLastScan();
-  }, 30000);
-
-  // Update "last scan" display every 5 seconds
-  setInterval(updateLastScan, 5000);
 })();
