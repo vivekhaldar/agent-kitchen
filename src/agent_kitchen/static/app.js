@@ -8,6 +8,7 @@
   let dashboardData = null;
   let lastScannedTime = null;
   let expandedRepos = new Set(); // repo_root values that are expanded
+  var timeFilterDays = Infinity; // max days back to show (Infinity = all)
 
   // --- DOM refs ---
   const $loading = document.getElementById("loading");
@@ -18,6 +19,11 @@
   const $lastScan = document.getElementById("last-scan");
   const $btnRefresh = document.getElementById("btn-refresh");
   const $scanDays = document.getElementById("scan-days");
+  const $timeSlider = document.getElementById("time-slider");
+  const $timeSliderLabel = document.getElementById("time-slider-label");
+  const $searchOverlay = document.getElementById("search-overlay");
+  const $searchInput = document.getElementById("search-input");
+  const $searchResults = document.getElementById("search-results");
 
   // --- Helpers ---
 
@@ -56,6 +62,74 @@
     return session.id.substring(0, 8) + "\u2026";
   }
 
+  function allSessions() {
+    if (!dashboardData) return [];
+    var sessions = [];
+    (dashboardData.repo_groups || []).forEach(function (g) {
+      g.sessions.forEach(function (s) {
+        sessions.push({ session: s, repoName: g.repo_name || "" });
+      });
+    });
+    (dashboardData.non_repo_groups || []).forEach(function (g) {
+      var name = g.cwd.split("/").filter(Boolean).pop() || g.cwd;
+      g.sessions.forEach(function (s) {
+        sessions.push({ session: s, repoName: name });
+      });
+    });
+    return sessions;
+  }
+
+  function fuzzyMatch(text, query) {
+    var tLower = text.toLowerCase();
+    var qLower = query.toLowerCase();
+    var qi = 0;
+    var indices = [];
+    for (var ti = 0; ti < tLower.length && qi < qLower.length; ti++) {
+      if (tLower[ti] === qLower[qi]) {
+        indices.push(ti);
+        qi++;
+      }
+    }
+    if (qi < qLower.length) return null;
+    // Score: prefer consecutive matches and matches at word boundaries
+    var score = 0;
+    for (var i = 0; i < indices.length; i++) {
+      if (i > 0 && indices[i] === indices[i - 1] + 1) score += 10;
+      if (indices[i] === 0 || text[indices[i] - 1] === " ") score += 5;
+    }
+    return { indices: indices, score: score };
+  }
+
+  function highlightMatches(text, indices) {
+    if (!indices || indices.length === 0) return escapeHtml(text);
+    var result = "";
+    var idxSet = new Set(indices);
+    var inMark = false;
+    for (var i = 0; i < text.length; i++) {
+      if (idxSet.has(i) && !inMark) {
+        result += "<mark>";
+        inMark = true;
+      } else if (!idxSet.has(i) && inMark) {
+        result += "</mark>";
+        inMark = false;
+      }
+      result += escapeHtml(text[i]);
+    }
+    if (inMark) result += "</mark>";
+    return result;
+  }
+
+  function filterSessionByTime(session) {
+    if (timeFilterDays === Infinity) return true;
+    if (!session.last_active) return false;
+    var cutoff = Date.now() - timeFilterDays * 24 * 60 * 60 * 1000;
+    return new Date(session.last_active).getTime() >= cutoff;
+  }
+
+  function filterGroupSessions(group) {
+    return group.sessions.filter(filterSessionByTime);
+  }
+
   // --- Rendering ---
 
   function renderSessionRow(session) {
@@ -85,8 +159,8 @@
     ' 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48' +
     ' 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
 
-  function renderRepoGroup(group) {
-    if (group.sessions.length === 0) return null;
+  function renderRepoGroup(group, filteredSessions) {
+    if (filteredSessions.length === 0) return null;
 
     var isExpanded = expandedRepos.has(group.repo_root);
     var container = document.createElement("div");
@@ -98,7 +172,7 @@
     if (group.git_dirty) metaParts.push('<span class="dirty">dirty</span>');
     if (group.unpushed_commits > 0) metaParts.push('<span class="unpushed">' + group.unpushed_commits + " unpushed</span>");
     if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push("clean");
-    metaParts.push(group.sessions.length + " sessions");
+    metaParts.push(filteredSessions.length + " sessions");
 
     var header = document.createElement("div");
     header.className = "repo-header";
@@ -115,18 +189,18 @@
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
     var visibleCount = INITIAL_VISIBLE;
-    var showingAll = group.sessions.length <= INITIAL_VISIBLE;
+    var showingAll = filteredSessions.length <= INITIAL_VISIBLE;
 
     function renderVisibleSessions() {
       sessionList.innerHTML = "";
-      var toShow = showingAll ? group.sessions : group.sessions.slice(0, visibleCount);
+      var toShow = showingAll ? filteredSessions : filteredSessions.slice(0, visibleCount);
       toShow.forEach(function (session) {
         sessionList.appendChild(renderSessionRow(session));
       });
       if (!showingAll) {
         var moreBtn = document.createElement("div");
         moreBtn.className = "show-more-btn";
-        moreBtn.textContent = "Show all " + group.sessions.length + " sessions";
+        moreBtn.textContent = "Show all " + filteredSessions.length + " sessions";
         moreBtn.addEventListener("click", function (e) {
           e.stopPropagation();
           showingAll = true;
@@ -163,8 +237,8 @@
     return container;
   }
 
-  function renderNonRepoGroup(group) {
-    if (group.sessions.length === 0) return null;
+  function renderNonRepoGroup(group, filteredSessions) {
+    if (filteredSessions.length === 0) return null;
 
     var isExpanded = expandedRepos.has(group.cwd);
     var container = document.createElement("div");
@@ -179,25 +253,25 @@
       '<div class="repo-header-left">' +
       '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
       '<span class="repo-name">' + escapeHtml(displayName) + "</span>" +
-      '<span class="repo-meta">(' + group.sessions.length + " sessions)</span>" +
+      '<span class="repo-meta">(' + filteredSessions.length + " sessions)</span>" +
       "</div>" +
       '<div class="repo-header-right">' + timeAgo(group.last_active) + "</div>";
 
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
-    var showingAll = group.sessions.length <= INITIAL_VISIBLE;
+    var showingAll = filteredSessions.length <= INITIAL_VISIBLE;
 
     function renderVisibleSessions() {
       sessionList.innerHTML = "";
-      var toShow = showingAll ? group.sessions : group.sessions.slice(0, INITIAL_VISIBLE);
+      var toShow = showingAll ? filteredSessions : filteredSessions.slice(0, INITIAL_VISIBLE);
       toShow.forEach(function (session) {
         sessionList.appendChild(renderSessionRow(session));
       });
       if (!showingAll) {
         var moreBtn = document.createElement("div");
         moreBtn.className = "show-more-btn";
-        moreBtn.textContent = "Show all " + group.sessions.length + " sessions";
+        moreBtn.textContent = "Show all " + filteredSessions.length + " sessions";
         moreBtn.addEventListener("click", function (e) {
           e.stopPropagation();
           showingAll = true;
@@ -275,9 +349,10 @@
 
     $repoGroups.innerHTML = "";
     allGroups.forEach(function (entry) {
+      var filtered = filterGroupSessions(entry.group);
       var el = entry.type === "repo"
-        ? renderRepoGroup(entry.group)
-        : renderNonRepoGroup(entry.group);
+        ? renderRepoGroup(entry.group, filtered)
+        : renderNonRepoGroup(entry.group, filtered);
       if (el) $repoGroups.appendChild(el);
     });
   }
@@ -290,6 +365,7 @@
       .then(function (data) {
         dashboardData = data;
         lastScannedTime = data.last_scanned;
+        updateSliderRange();
         render();
         updateLastScan();
       })
@@ -307,6 +383,7 @@
       .then(function (data) {
         dashboardData = data;
         lastScannedTime = data.last_scanned;
+        updateSliderRange();
         render();
         updateLastScan();
       })
@@ -431,6 +508,188 @@
       $lastScan.textContent = "Last scan: " + timeAgo(lastScannedTime);
     }
   }
+
+  // --- Time Slider ---
+
+  function computeMaxDays() {
+    if (!dashboardData) return 60;
+    var oldest = Infinity;
+    var all = allSessions();
+    all.forEach(function (entry) {
+      if (entry.session.last_active) {
+        var t = new Date(entry.session.last_active).getTime();
+        if (t < oldest) oldest = t;
+      }
+    });
+    if (oldest === Infinity) return 60;
+    return Math.max(1, Math.ceil((Date.now() - oldest) / (24 * 60 * 60 * 1000)));
+  }
+
+  function updateSliderRange() {
+    var maxDays = computeMaxDays();
+    $timeSlider.max = maxDays;
+    $timeSlider.value = maxDays;
+    timeFilterDays = Infinity;
+    updateSliderLabel(maxDays, maxDays);
+  }
+
+  function updateSliderLabel(val, max) {
+    if (val >= max) {
+      $timeSliderLabel.textContent = "All time";
+    } else if (val === 1) {
+      $timeSliderLabel.textContent = "Last 24h";
+    } else {
+      $timeSliderLabel.textContent = "Last " + val + "d";
+    }
+  }
+
+  $timeSlider.addEventListener("input", function () {
+    var val = parseInt($timeSlider.value, 10);
+    var max = parseInt($timeSlider.max, 10);
+    if (val >= max) {
+      timeFilterDays = Infinity;
+    } else {
+      timeFilterDays = val;
+    }
+    updateSliderLabel(val, max);
+    render();
+  });
+
+  // --- Search Overlay ---
+
+  var searchSelectedIdx = 0;
+  var searchMatches = [];
+
+  function openSearch() {
+    $searchOverlay.classList.remove("hidden");
+    $searchInput.value = "";
+    $searchResults.innerHTML = "";
+    searchSelectedIdx = 0;
+    searchMatches = [];
+    $searchInput.focus();
+  }
+
+  function closeSearch() {
+    $searchOverlay.classList.add("hidden");
+    $searchInput.value = "";
+    $searchResults.innerHTML = "";
+  }
+
+  function performSearch(query) {
+    $searchResults.innerHTML = "";
+    searchSelectedIdx = 0;
+
+    if (!query.trim()) {
+      searchMatches = [];
+      return;
+    }
+
+    var all = allSessions();
+    var scored = [];
+    all.forEach(function (entry) {
+      var label = sessionLabel(entry.session);
+      var searchText = label + " " + entry.repoName + " " + (entry.session.status || "");
+      var m = fuzzyMatch(searchText, query);
+      if (m) {
+        // Re-match just the label for highlighting
+        var labelMatch = fuzzyMatch(label, query);
+        scored.push({
+          session: entry.session,
+          repoName: entry.repoName,
+          score: m.score,
+          labelIndices: labelMatch ? labelMatch.indices : [],
+        });
+      }
+    });
+
+    scored.sort(function (a, b) { return b.score - a.score; });
+    searchMatches = scored.slice(0, 50);
+
+    if (searchMatches.length === 0) {
+      $searchResults.innerHTML = '<div class="search-no-results">No matches</div>';
+      return;
+    }
+
+    searchMatches.forEach(function (match, idx) {
+      var row = document.createElement("div");
+      row.className = "search-result-row" + (idx === 0 ? " selected" : "");
+      var cssCls = statusCssClass(match.session.status);
+      row.innerHTML =
+        '<div class="status-dot ' + cssCls + '"></div>' +
+        '<div>' +
+          '<div class="search-result-summary">' +
+            highlightMatches(sessionLabel(match.session), match.labelIndices) +
+          '</div>' +
+          '<span class="search-result-repo">' + escapeHtml(match.repoName) + '</span>' +
+        '</div>' +
+        '<span class="status-label ' + cssCls + '">' +
+          escapeHtml(match.session.status) + '</span>' +
+        '<span class="time-ago">' + timeAgo(match.session.last_active) + '</span>';
+
+      row.addEventListener("click", function () {
+        closeSearch();
+        launchFromSearch(match.session);
+      });
+      $searchResults.appendChild(row);
+    });
+  }
+
+  function launchFromSearch(session) {
+    openTerminal(session);
+  }
+
+  function updateSearchSelection() {
+    var rows = $searchResults.querySelectorAll(".search-result-row");
+    rows.forEach(function (r, i) {
+      r.classList.toggle("selected", i === searchSelectedIdx);
+    });
+    if (rows[searchSelectedIdx]) {
+      rows[searchSelectedIdx].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  $searchInput.addEventListener("input", function () {
+    performSearch($searchInput.value);
+  });
+
+  $searchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeSearch();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (searchMatches.length > 0) {
+        searchSelectedIdx = Math.min(searchSelectedIdx + 1, searchMatches.length - 1);
+        updateSearchSelection();
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (searchMatches.length > 0) {
+        searchSelectedIdx = Math.max(searchSelectedIdx - 1, 0);
+        updateSearchSelection();
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchMatches.length > 0 && searchMatches[searchSelectedIdx]) {
+        closeSearch();
+        launchFromSearch(searchMatches[searchSelectedIdx].session);
+      }
+    }
+  });
+
+  $searchOverlay.addEventListener("click", function (e) {
+    if (e.target === $searchOverlay) closeSearch();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    // Don't trigger if typing in an input, textarea, or terminal is focused
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (activeTerminal) return;
+    if (e.key === "/") {
+      e.preventDefault();
+      openSearch();
+    }
+  });
 
   // --- Event listeners ---
 

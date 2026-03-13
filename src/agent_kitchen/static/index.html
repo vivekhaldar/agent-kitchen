@@ -28,6 +28,13 @@
     </div>
   </header>
 
+  <div class="filter-bar" id="filter-bar">
+    <div class="time-slider-row">
+      <span class="time-slider-label" id="time-slider-label">All time</span>
+      <input type="range" id="time-slider" class="time-slider" min="1" max="60" value="60">
+    </div>
+  </div>
+
   <main class="content" id="content">
     <div class="loading" id="loading">Loading sessions...</div>
 
@@ -45,6 +52,18 @@
       No sessions found. Make sure <code>~/.claude</code> or <code>~/.codex</code> directories exist.
     </div>
   </main>
+
+  <div id="search-overlay" class="search-overlay hidden">
+    <div class="search-box">
+      <div class="search-input-row">
+        <span class="search-icon">/</span>
+        <input type="text" id="search-input" class="search-input"
+               placeholder="Search sessions..." autocomplete="off" spellcheck="false">
+        <kbd class="search-hint">esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
 
   <div id="terminal-panel" class="terminal-panel hidden">
     <div class="terminal-panel-header">
