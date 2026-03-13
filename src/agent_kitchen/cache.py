@@ -31,9 +31,28 @@ class SummaryCache:
             self.entries = {}
 
     def save(self) -> None:
-        """Write cache to disk atomically (write to temp file, then rename)."""
+        """Write cache to disk atomically, merging with on-disk state first.
+
+        Re-reads the cache file before writing to avoid losing entries added by
+        other processes (e.g. concurrent indexer runs or the server's /api/refresh).
+        In-memory entries take precedence over on-disk entries for the same key.
+        """
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {"version": 1, "entries": self.entries}
+
+        # Merge: load current disk state, then overlay our in-memory entries
+        disk_entries: dict[str, dict] = {}
+        if self.cache_path.exists():
+            try:
+                with open(self.cache_path) as f:
+                    disk_data = json.load(f)
+                disk_entries = disk_data.get("entries", {})
+            except (json.JSONDecodeError, KeyError, OSError):
+                pass  # If unreadable, proceed with just our entries
+
+        merged = {**disk_entries, **self.entries}
+        self.entries = merged
+
+        data = {"version": 1, "entries": merged}
         fd, tmp_path = tempfile.mkstemp(dir=self.cache_path.parent, suffix=".tmp")
         try:
             with open(fd, "w") as f:

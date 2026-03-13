@@ -281,13 +281,30 @@ class TestScannerMalformedJsonlWarning:
                     "message": {"content": [{"type": "text", "text": "welcome"}]},
                 }
             ),
+            json.dumps(
+                {
+                    "type": "user",
+                    "timestamp": "2026-03-01T10:04:00Z",
+                    "sessionId": "good-uuid",
+                    "cwd": "/Users/test",
+                    "message": {"content": [{"type": "text", "text": "one more thing"}]},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-03-01T10:05:00Z",
+                    "sessionId": "good-uuid",
+                    "message": {"content": [{"type": "text", "text": "sure"}]},
+                }
+            ),
         ]
         session_file.write_text("\n".join(lines) + "\n")
 
         since = datetime(2026, 1, 1, tzinfo=timezone.utc)
         sessions = scan_claude_sessions(since, projects_dir=tmp_path)
         assert len(sessions) == 1
-        assert sessions[0].turn_count == 4  # All valid records counted
+        assert sessions[0].turn_count == 6  # All valid records counted
 
 
 # --- server.py pipeline error handling ---

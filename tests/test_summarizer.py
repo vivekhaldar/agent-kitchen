@@ -55,7 +55,7 @@ class TestExtractContextClaude:
             str(CLAUDE_FIXTURES / "aaaa1111-2222-3333-4444-555566667777.jsonl"),
             "claude",
         )
-        assert "4" in ctx  # 4 turns (2 user + 2 assistant)
+        assert "Total turns: 6" in ctx  # 3 user + 3 assistant
 
     def test_last_five_messages_for_long_session(self):
         """For sessions with many messages, only last 5 user+assistant messages are included."""

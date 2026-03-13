@@ -122,8 +122,9 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
         # No valid timestamped user/assistant records found
         return None
 
-    # Sessions with ≤1 user turn are programmatic (SDK single-shot calls, not interactive)
-    if user_turn_count <= 1:
+    # Sessions with ≤2 user turns are programmatic (SDK calls, not interactive).
+    # SDK structured-output calls produce exactly 2 user records: the prompt + tool result.
+    if user_turn_count <= 2:
         return None
 
     # Fall back to decoded directory name for cwd if not in records

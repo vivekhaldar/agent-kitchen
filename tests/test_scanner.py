@@ -58,8 +58,8 @@ def test_scan_claude_sessions_parses_metadata():
     assert session_a.git_branch == "main"
     assert session_a.slug == "lively-herding-sonnet"
     assert session_a.started_at == datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc)
-    assert session_a.last_active == datetime(2026, 3, 1, 10, 3, 0, tzinfo=timezone.utc)
-    assert session_a.turn_count == 4  # 2 user + 2 assistant
+    assert session_a.last_active == datetime(2026, 3, 1, 10, 5, 0, tzinfo=timezone.utc)
+    assert session_a.turn_count == 6  # 3 user + 3 assistant
     assert session_a.summary == ""  # Not yet summarized
     assert session_a.status == ""  # Not yet classified
 
@@ -71,7 +71,7 @@ def test_scan_claude_sessions_extracts_git_branch():
 
     session_b = session_map["bbbb1111-2222-3333-4444-555566667777"]
     assert session_b.git_branch == "feature-branch"
-    assert session_b.turn_count == 4  # 2 user + 2 assistant
+    assert session_b.turn_count == 6  # 3 user + 3 assistant
 
 
 def test_scan_claude_sessions_filters_by_since():
@@ -125,7 +125,7 @@ def test_scan_claude_sessions_slug_from_any_user_record():
 
 
 def test_scan_claude_sessions_filters_non_interactive(tmp_path):
-    """Sessions with only 1 user turn (SDK/programmatic) should be filtered out."""
+    """Sessions with ≤2 user turns (SDK/programmatic) should be filtered out."""
     project_dir = tmp_path / "-Users-test"
     project_dir.mkdir()
 
@@ -154,7 +154,47 @@ def test_scan_claude_sessions_filters_non_interactive(tmp_path):
     ]
     sdk_file.write_text("\n".join(sdk_lines) + "\n")
 
-    # Multi-turn session (interactive: 2+ user turns)
+    # 2-turn session (SDK structured output: prompt + tool result)
+    sdk2_file = project_dir / "sdk-structured-session.jsonl"
+    sdk2_lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:00:00Z",
+                "sessionId": "sdk-structured-session",
+                "cwd": "/Users/test",
+                "message": {"content": "Summarize this session"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:01:00Z",
+                "sessionId": "sdk-structured-session",
+                "message": {"content": "Using structured output tool..."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:01:30Z",
+                "sessionId": "sdk-structured-session",
+                "cwd": "/Users/test",
+                "message": {"content": "[tool result]"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:02:00Z",
+                "sessionId": "sdk-structured-session",
+                "message": {"content": '{"summary": "test", "status": "done"}'},
+            }
+        ),
+    ]
+    sdk2_file.write_text("\n".join(sdk2_lines) + "\n")
+
+    # Multi-turn session (interactive: 3+ user turns)
     interactive_file = project_dir / "interactive-session.jsonl"
     interactive_lines = [
         json.dumps(
@@ -189,6 +229,23 @@ def test_scan_claude_sessions_filters_non_interactive(tmp_path):
                 "timestamp": "2026-03-01T10:03:00Z",
                 "sessionId": "interactive-session",
                 "message": {"content": "Done."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:04:00Z",
+                "sessionId": "interactive-session",
+                "cwd": "/Users/test",
+                "message": {"content": "Looks good, thanks"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:05:00Z",
+                "sessionId": "interactive-session",
+                "message": {"content": "You're welcome!"},
             }
         ),
     ]
