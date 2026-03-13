@@ -239,14 +239,39 @@ async def _lifespan(app: FastAPI):
     _refresh_task = None
 
 
-def create_app(*, enable_background_refresh: bool = True) -> FastAPI:
+@asynccontextmanager
+async def _scan_only_lifespan(app: FastAPI):
+    """Scan and group sessions on startup without LLM summarization or background refresh."""
+    global _dashboard_data
+    try:
+        logger.info("Scan-only mode: scanning sessions (no LLM, no background refresh)")
+        _all_sessions, data = _scan_and_group()
+        _dashboard_data = data
+        logger.info(
+            "Scan-only mode complete — %d sessions loaded from cache/fallback",
+            sum(len(g.sessions) for g in data["repo_groups"])
+            + sum(len(g.sessions) for g in data["non_repo_groups"]),
+        )
+    except Exception:
+        logger.exception("Scan-only startup failed")
+    yield
+
+
+def create_app(*, enable_background_refresh: bool = True, summarize: bool = True) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
         enable_background_refresh: If True, start periodic background rescan on startup.
             Set to False in tests to avoid background tasks.
+        summarize: If False, skip LLM summarization and background refresh.
+            Uses cached summaries and fallbacks only.
     """
-    lifespan = _lifespan if enable_background_refresh else None
+    if not enable_background_refresh:
+        lifespan = None
+    elif not summarize:
+        lifespan = _scan_only_lifespan
+    else:
+        lifespan = _lifespan
     app = FastAPI(title="Agent Kitchen", lifespan=lifespan)
 
     @app.get("/api/sessions")

@@ -87,6 +87,7 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
     started_at = None
     last_active = None
     turn_count = 0
+    user_turn_count = 0
 
     # Scan all records for metadata and turn count
     for line in lines:
@@ -108,6 +109,7 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
                     last_active = timestamp
 
         if record_type == "user":
+            user_turn_count += 1
             # Extract metadata from user records
             if cwd is None:
                 cwd = record.get("cwd")
@@ -118,6 +120,10 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
 
     if started_at is None or last_active is None:
         # No valid timestamped user/assistant records found
+        return None
+
+    # Sessions with ≤1 user turn are programmatic (SDK single-shot calls, not interactive)
+    if user_turn_count <= 1:
         return None
 
     # Fall back to decoded directory name for cwd if not in records
@@ -165,13 +171,17 @@ def scan_claude_sessions(
 
     since_ts = since.timestamp()
     sessions: list[Session] = []
+    scanned = 0
 
     for project_dir in projects_dir.iterdir():
         if not project_dir.is_dir():
             continue
 
-        # Only look at JSONL files directly under the project directory
+        # Only look at JSONL files directly under the project directory.
+        # Files in subagents/ subdirectories are SDK-spawned child sessions, not interactive.
         for jsonl_file in project_dir.glob("*.jsonl"):
+            if "subagents" in jsonl_file.parts:
+                continue
             # Skip if file is too old
             try:
                 mtime = os.path.getmtime(jsonl_file)
@@ -180,9 +190,19 @@ def scan_claude_sessions(
             if mtime < since_ts:
                 continue
 
+            scanned += 1
             session = _scan_single_claude_file(jsonl_file)
             if session:
                 sessions.append(session)
+
+    filtered = scanned - len(sessions)
+    if filtered:
+        logger.info(
+            "Filtered %d non-interactive sessions (%d scanned, %d kept)",
+            filtered,
+            scanned,
+            len(sessions),
+        )
 
     return sessions
 

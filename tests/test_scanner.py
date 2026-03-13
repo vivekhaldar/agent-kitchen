@@ -71,7 +71,7 @@ def test_scan_claude_sessions_extracts_git_branch():
 
     session_b = session_map["bbbb1111-2222-3333-4444-555566667777"]
     assert session_b.git_branch == "feature-branch"
-    assert session_b.turn_count == 2  # 1 user + 1 assistant
+    assert session_b.turn_count == 4  # 2 user + 2 assistant
 
 
 def test_scan_claude_sessions_filters_by_since():
@@ -122,6 +122,82 @@ def test_scan_claude_sessions_slug_from_any_user_record():
 
     # Session B has no slug in the fixture — should be None
     assert session_map["bbbb1111-2222-3333-4444-555566667777"].slug is None
+
+
+def test_scan_claude_sessions_filters_non_interactive(tmp_path):
+    """Sessions with only 1 user turn (SDK/programmatic) should be filtered out."""
+    project_dir = tmp_path / "-Users-test"
+    project_dir.mkdir()
+
+    # Single-turn session (SDK-style: 1 user + 1 assistant)
+    sdk_file = project_dir / "sdk-session.jsonl"
+    import json
+
+    sdk_lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:00:00Z",
+                "sessionId": "sdk-session",
+                "cwd": "/Users/test",
+                "message": {"content": "Classify this email"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:01:00Z",
+                "sessionId": "sdk-session",
+                "message": {"content": "Category: newsletter"},
+            }
+        ),
+    ]
+    sdk_file.write_text("\n".join(sdk_lines) + "\n")
+
+    # Multi-turn session (interactive: 2+ user turns)
+    interactive_file = project_dir / "interactive-session.jsonl"
+    interactive_lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:00:00Z",
+                "sessionId": "interactive-session",
+                "cwd": "/Users/test",
+                "message": {"content": "Fix the bug"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:01:00Z",
+                "sessionId": "interactive-session",
+                "message": {"content": "Looking at it..."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:02:00Z",
+                "sessionId": "interactive-session",
+                "cwd": "/Users/test",
+                "message": {"content": "Also add a test"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:03:00Z",
+                "sessionId": "interactive-session",
+                "message": {"content": "Done."},
+            }
+        ),
+    ]
+    interactive_file.write_text("\n".join(interactive_lines) + "\n")
+
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    sessions = scan_claude_sessions(since, projects_dir=tmp_path)
+    assert len(sessions) == 1
+    assert sessions[0].id == "interactive-session"
 
 
 def test_scan_claude_sessions_missing_directory(tmp_path):

@@ -36,6 +36,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=False,
         help="Don't auto-open the dashboard in a browser",
     )
+    parser.add_argument(
+        "--no-summarize",
+        action="store_true",
+        default=False,
+        help="Skip background LLM summarization (use cached/fallback summaries only)",
+    )
     return parser
 
 
@@ -72,7 +78,7 @@ def run_cli(argv: list[str] | None = None) -> None:
         print("LLM summarization will use fallback mode.")
 
     # Create the app (initial scan runs in the background via lifespan)
-    app = create_app()
+    app = create_app(summarize=not args.no_summarize)
 
     url = f"http://localhost:{args.port}"
     print(f"Dashboard starting at {url}")
