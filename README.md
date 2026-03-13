@@ -43,6 +43,29 @@ agent-kitchen --no-open
 
 The dashboard runs at `http://localhost:8099` by default.
 
+## Indexing sessions
+
+The dashboard shows fallback summaries (first user message) on startup, then upgrades to LLM-generated summaries in the background. For faster startup with pre-computed summaries, run the indexer first:
+
+```bash
+# Index all sessions from the last 60 days (default)
+agent-kitchen-index
+
+# Index a specific time range
+agent-kitchen-index --scan-days 30
+
+# See what would be indexed without making LLM calls
+agent-kitchen-index --dry-run
+
+# Re-index everything, ignoring cache
+agent-kitchen-index --force
+
+# Control LLM concurrency (default: 3)
+agent-kitchen-index --concurrency 5
+```
+
+The indexer logs progress to stderr so you can watch it work. Summaries are cached at `~/.cache/agent-kitchen/summaries.json` and shared with the dashboard.
+
 ## Authentication
 
 The summarizer uses Claude Haiku via the Claude Agent SDK, authenticated through a Max subscription. The token is retrieved from the `pass` password manager:

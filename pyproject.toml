@@ -37,6 +37,7 @@ Repository = "https://github.com/haldar/agent-kitchen"
 
 [project.scripts]
 agent-kitchen = "agent_kitchen.cli:main"
+agent-kitchen-index = "agent_kitchen.indexer:main"
 
 [tool.ruff]
 target-version = "py312"
