@@ -4,7 +4,6 @@
 import asyncio
 import json
 import logging
-import re
 from dataclasses import dataclass
 
 from agent_kitchen.config import HAIKU_MODEL, SUMMARY_CONCURRENCY
@@ -187,10 +186,6 @@ Session context:
 - Working directory: {cwd}
 {context}
 
-Respond in exactly this JSON format, nothing else:
-{{"summary": "<one-line summary of what this session is about, max 80 chars>", \
-"status": "<one of: done, likely done, in progress, likely in progress, waiting for input>"}}
-
 Rules for status:
 - "done": The task was clearly completed. Agent confirmed completion or user acknowledged it.
 - "likely done": The task appears complete but there's no explicit confirmation.
@@ -198,6 +193,27 @@ Rules for status:
 - "likely in progress": Some work happened but it's unclear if more is needed.
 - "waiting for input": The last assistant message asks the user a question or presents options.\
 """
+
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {
+            "type": "string",
+            "description": "One-line summary of what this session is about, max 80 chars",
+        },
+        "status": {
+            "type": "string",
+            "enum": [
+                "done",
+                "likely done",
+                "in progress",
+                "likely in progress",
+                "waiting for input",
+            ],
+        },
+    },
+    "required": ["summary", "status"],
+}
 
 
 @dataclass
@@ -208,8 +224,8 @@ class SummarizeResult:
     status: str
 
 
-async def _call_llm(prompt: str) -> str:
-    """Call Claude Haiku via the Agent SDK and return the text response."""
+async def _call_llm(prompt: str) -> dict:
+    """Call Claude Haiku via the Agent SDK and return structured output as a dict."""
     import os
 
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
@@ -217,33 +233,21 @@ async def _call_llm(prompt: str) -> str:
     # Allow running inside a Claude Code session (the SDK refuses nested sessions)
     os.environ.pop("CLAUDECODE", None)
 
-    result_text = ""
+    result: dict = {}
     async for msg in query(
         prompt=prompt,
         options=ClaudeAgentOptions(
             model=HAIKU_MODEL,
-            max_turns=1,
+            max_turns=2,
+            output_format={
+                "type": "json_schema",
+                "schema": SUMMARY_SCHEMA,
+            },
         ),
     ):
-        if isinstance(msg, ResultMessage) and msg.result:
-            result_text = msg.result
-    return result_text
-
-
-def _extract_json_from_response(text: str) -> dict | None:
-    """Parse JSON from an LLM response, handling markdown code blocks."""
-    text = text.strip()
-    # Strip markdown code block if present
-    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
-    if match:
-        text = match.group(1).strip()
-    try:
-        data = json.loads(text)
-        if isinstance(data, dict) and "summary" in data and "status" in data:
-            return data
-    except (json.JSONDecodeError, ValueError):
-        pass
-    return None
+        if isinstance(msg, ResultMessage) and msg.structured_output:
+            result = msg.structured_output
+    return result
 
 
 def _make_fallback(context: str) -> SummarizeResult:
@@ -273,18 +277,17 @@ async def summarize_session(context: str, source: str, cwd: str) -> SummarizeRes
     prompt = SUMMARY_PROMPT_TEMPLATE.format(source=source, cwd=cwd, context=context)
 
     try:
-        response = await _call_llm(prompt)
+        data = await _call_llm(prompt)
     except Exception:
         logger.warning("LLM call failed for session in %s", cwd, exc_info=True)
         return _make_fallback(context)
 
-    data = _extract_json_from_response(response)
-    if data is None:
-        logger.warning("Failed to parse LLM response as JSON: %s", response[:200])
+    if not data:
+        logger.warning("Empty structured output for session in %s", cwd)
         return _make_fallback(context)
 
-    summary = _truncate(str(data["summary"]), 80)
-    status = str(data["status"])
+    summary = _truncate(str(data.get("summary", "")), 80)
+    status = str(data.get("status", ""))
     if status not in VALID_STATUSES:
         status = "likely in progress"
 

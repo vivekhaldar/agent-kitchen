@@ -2,7 +2,6 @@
 # ABOUTME: Uses mocked LLM calls for unit tests; integration test requires live SDK.
 
 import asyncio
-import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -74,49 +73,27 @@ class TestSummarizeSession:
     @pytest.mark.asyncio
     async def test_returns_summarize_result(self):
         """Should return a SummarizeResult with summary and status."""
-        mock_response = json.dumps({"summary": "Implement retry logic", "status": "done"})
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "Implement retry logic", "status": "done"}
             result = await summarize_session("Some context", "claude", "/tmp")
         assert isinstance(result, SummarizeResult)
         assert result.summary == "Implement retry logic"
         assert result.status == "done"
 
     @pytest.mark.asyncio
-    async def test_parses_valid_json_response(self):
-        """Should parse a valid JSON response from the LLM."""
-        mock_response = json.dumps({"summary": "Fix CI pipeline", "status": "in progress"})
+    async def test_parses_valid_response(self):
+        """Should use structured output dict from the LLM."""
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "Fix CI pipeline", "status": "in progress"}
             result = await summarize_session("Context text", "codex", "/home/user")
         assert result.summary == "Fix CI pipeline"
         assert result.status == "in progress"
 
     @pytest.mark.asyncio
-    async def test_handles_json_with_extra_whitespace(self):
-        """Should handle JSON with extra whitespace or newlines."""
-        mock_response = '  \n  {"summary": "Test thing", "status": "done"}  \n  '
+    async def test_fallback_on_empty_output(self):
+        """Should use fallback when structured output is empty."""
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
-            result = await summarize_session("Context", "claude", "/tmp")
-        assert result.summary == "Test thing"
-        assert result.status == "done"
-
-    @pytest.mark.asyncio
-    async def test_handles_json_in_markdown_code_block(self):
-        """LLMs sometimes wrap JSON in markdown code blocks."""
-        mock_response = '```json\n{"summary": "Do stuff", "status": "likely done"}\n```'
-        with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
-            result = await summarize_session("Context", "claude", "/tmp")
-        assert result.summary == "Do stuff"
-        assert result.status == "likely done"
-
-    @pytest.mark.asyncio
-    async def test_fallback_on_invalid_json(self):
-        """Should use fallback when LLM returns non-JSON."""
-        with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = "This is not JSON at all"
+            mock_llm.return_value = {}
             result = await summarize_session(
                 "First user message: Implement caching\nLast messages:\n  [user]: more stuff",
                 "claude",
@@ -124,7 +101,6 @@ class TestSummarizeSession:
             )
         assert isinstance(result, SummarizeResult)
         assert result.status == "likely in progress"
-        # Fallback uses first user message text
         assert len(result.summary) > 0
 
     @pytest.mark.asyncio
@@ -141,35 +117,19 @@ class TestSummarizeSession:
         assert result.status == "likely in progress"
 
     @pytest.mark.asyncio
-    async def test_fallback_on_missing_summary_key(self):
-        """Should use fallback when JSON is valid but missing required keys."""
-        mock_response = json.dumps({"wrong_key": "value"})
-        with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
-            result = await summarize_session(
-                "First user message: Deploy service\nLast messages:",
-                "claude",
-                "/tmp",
-            )
-        assert isinstance(result, SummarizeResult)
-        assert result.status == "likely in progress"
-
-    @pytest.mark.asyncio
     async def test_truncates_long_summary(self):
         """Summary should be truncated to 80 chars max."""
         long_summary = "A" * 120
-        mock_response = json.dumps({"summary": long_summary, "status": "done"})
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": long_summary, "status": "done"}
             result = await summarize_session("Context", "claude", "/tmp")
         assert len(result.summary) <= 83  # 80 + "..."
 
     @pytest.mark.asyncio
     async def test_normalizes_invalid_status(self):
         """Should normalize an invalid status to 'likely in progress'."""
-        mock_response = json.dumps({"summary": "Do things", "status": "completed successfully"})
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "Do things", "status": "completed successfully"}
             result = await summarize_session("Context", "claude", "/tmp")
         assert result.status in VALID_STATUSES
 
@@ -177,7 +137,7 @@ class TestSummarizeSession:
     async def test_prompt_includes_source_and_cwd(self):
         """The prompt sent to the LLM should include source and cwd."""
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = json.dumps({"summary": "x", "status": "done"})
+            mock_llm.return_value = {"summary": "x", "status": "done"}
             await summarize_session("Context here", "codex", "/home/user/project")
         prompt_sent = mock_llm.call_args[0][0]
         assert "codex" in prompt_sent
@@ -209,10 +169,8 @@ class TestBatchSummarize:
         cache.needs_refresh.return_value = True
         cache.get.return_value = None
 
-        mock_response = json.dumps({"summary": "New summary", "status": "in progress"})
-
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "New summary", "status": "in progress"}
             with patch("agent_kitchen.summarizer.extract_context_for_summary") as mock_extract:
                 mock_extract.return_value = "First user message: Test\nLast messages:"
                 results = await batch_summarize([session], cache)
@@ -229,10 +187,8 @@ class TestBatchSummarize:
         cache.needs_refresh.return_value = True
         cache.get.return_value = None
 
-        mock_response = json.dumps({"summary": "Updated", "status": "done"})
-
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "Updated", "status": "done"}
             with patch("agent_kitchen.summarizer.extract_context_for_summary") as mock_extract:
                 mock_extract.return_value = "First user message: Test\nLast messages:"
                 await batch_summarize([session], cache)
@@ -247,10 +203,8 @@ class TestBatchSummarize:
         cache.needs_refresh.return_value = True
         cache.get.return_value = None
 
-        mock_response = json.dumps({"summary": "LLM summary", "status": "done"})
-
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "LLM summary", "status": "done"}
             with patch("agent_kitchen.summarizer.extract_context_for_summary") as mock_extract:
                 mock_extract.return_value = "First user message: Test\nLast messages:"
                 results = await batch_summarize([session], cache)
@@ -290,7 +244,7 @@ class TestBatchSummarize:
             max_concurrent = max(max_concurrent, concurrent_count)
             await asyncio.sleep(0.01)
             concurrent_count -= 1
-            return json.dumps({"summary": "x", "status": "done"})
+            return {"summary": "x", "status": "done"}
 
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.side_effect = slow_llm
@@ -313,7 +267,7 @@ class TestBatchSummarize:
         async def sequenced_llm(prompt):
             nonlocal call_count
             call_count += 1
-            return json.dumps({"summary": f"Summary {call_count}", "status": "done"})
+            return {"summary": f"Summary {call_count}", "status": "done"}
 
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.side_effect = sequenced_llm
@@ -341,10 +295,8 @@ class TestBatchSummarize:
         cache.needs_refresh.return_value = True
         cache.get.return_value = None
 
-        mock_response = json.dumps({"summary": "x", "status": "done"})
-
         with patch("agent_kitchen.summarizer._call_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_response
+            mock_llm.return_value = {"summary": "x", "status": "done"}
             with patch("agent_kitchen.summarizer.extract_context_for_summary") as mock_extract:
                 mock_extract.return_value = "First user message: Test\nLast messages:"
                 await batch_summarize([session], cache)
