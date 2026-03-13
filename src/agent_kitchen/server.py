@@ -305,9 +305,14 @@ def create_app(*, enable_background_refresh: bool = True, summarize: bool = True
         return JSONResponse(content=_serialize_dashboard(_dashboard_data))
 
     @app.get("/api/refresh")
-    async def refresh():
+    async def refresh(scan_days: int = Query(default=_config.SCAN_WINDOW_DAYS)):
         global _dashboard_data
-        data = await run_scan_pipeline()
+        saved = _config.SCAN_WINDOW_DAYS
+        _config.SCAN_WINDOW_DAYS = scan_days
+        try:
+            data = await run_scan_pipeline()
+        finally:
+            _config.SCAN_WINDOW_DAYS = saved
         _dashboard_data = data
         return JSONResponse(content=_serialize_dashboard(data))
 

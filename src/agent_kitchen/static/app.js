@@ -8,8 +8,6 @@
   let dashboardData = null;
   let lastScannedTime = null;
   let expandedRepos = new Set(); // repo_root values that are expanded
-  let currentView = "grouped"; // "grouped" or "chronological"
-  let sourceFilter = "all"; // "all", "claude", or "codex"
 
   // --- DOM refs ---
   const $loading = document.getElementById("loading");
@@ -19,7 +17,7 @@
   const $emptyState = document.getElementById("empty-state");
   const $lastScan = document.getElementById("last-scan");
   const $btnRefresh = document.getElementById("btn-refresh");
-  const $filterSource = document.getElementById("filter-source");
+  const $scanDays = document.getElementById("scan-days");
 
   // --- Helpers ---
 
@@ -58,11 +56,6 @@
     return session.id.substring(0, 8) + "\u2026";
   }
 
-  function filterSessions(sessions) {
-    if (sourceFilter === "all") return sessions;
-    return sessions.filter(function (s) { return s.source === sourceFilter; });
-  }
-
   // --- Rendering ---
 
   function renderSessionRow(session) {
@@ -83,9 +76,17 @@
     return row;
   }
 
+  // Octocat SVG icon for git repo groups
+  var OCTOCAT_SVG = '<svg class="octocat-icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor">' +
+    '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49' +
+    '-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82' +
+    '.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15' +
+    '-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82' +
+    ' 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48' +
+    ' 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+
   function renderRepoGroup(group) {
-    var filtered = filterSessions(group.sessions);
-    if (filtered.length === 0) return null;
+    if (group.sessions.length === 0) return null;
 
     var isExpanded = expandedRepos.has(group.repo_root);
     var container = document.createElement("div");
@@ -97,13 +98,14 @@
     if (group.git_dirty) metaParts.push('<span class="dirty">dirty</span>');
     if (group.unpushed_commits > 0) metaParts.push('<span class="unpushed">' + group.unpushed_commits + " unpushed</span>");
     if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push("clean");
-    metaParts.push(filtered.length + " sessions");
+    metaParts.push(group.sessions.length + " sessions");
 
     var header = document.createElement("div");
     header.className = "repo-header";
     header.innerHTML =
       '<div class="repo-header-left">' +
       '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
+      OCTOCAT_SVG +
       '<span class="repo-name">' + escapeHtml(group.repo_name) + "</span>" +
       '<span class="repo-meta">(' + metaParts.join(", ") + ")</span>" +
       "</div>" +
@@ -113,18 +115,18 @@
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
     var visibleCount = INITIAL_VISIBLE;
-    var showingAll = filtered.length <= INITIAL_VISIBLE;
+    var showingAll = group.sessions.length <= INITIAL_VISIBLE;
 
     function renderVisibleSessions() {
       sessionList.innerHTML = "";
-      var toShow = showingAll ? filtered : filtered.slice(0, visibleCount);
+      var toShow = showingAll ? group.sessions : group.sessions.slice(0, visibleCount);
       toShow.forEach(function (session) {
         sessionList.appendChild(renderSessionRow(session));
       });
       if (!showingAll) {
         var moreBtn = document.createElement("div");
         moreBtn.className = "show-more-btn";
-        moreBtn.textContent = "Show all " + filtered.length + " sessions";
+        moreBtn.textContent = "Show all " + group.sessions.length + " sessions";
         moreBtn.addEventListener("click", function (e) {
           e.stopPropagation();
           showingAll = true;
@@ -162,8 +164,7 @@
   }
 
   function renderNonRepoGroup(group) {
-    var filtered = filterSessions(group.sessions);
-    if (filtered.length === 0) return null;
+    if (group.sessions.length === 0) return null;
 
     var isExpanded = expandedRepos.has(group.cwd);
     var container = document.createElement("div");
@@ -178,25 +179,25 @@
       '<div class="repo-header-left">' +
       '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
       '<span class="repo-name">' + escapeHtml(displayName) + "</span>" +
-      '<span class="repo-meta">(' + filtered.length + " sessions)</span>" +
+      '<span class="repo-meta">(' + group.sessions.length + " sessions)</span>" +
       "</div>" +
       '<div class="repo-header-right">' + timeAgo(group.last_active) + "</div>";
 
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
-    var showingAll = filtered.length <= INITIAL_VISIBLE;
+    var showingAll = group.sessions.length <= INITIAL_VISIBLE;
 
     function renderVisibleSessions() {
       sessionList.innerHTML = "";
-      var toShow = showingAll ? filtered : filtered.slice(0, INITIAL_VISIBLE);
+      var toShow = showingAll ? group.sessions : group.sessions.slice(0, INITIAL_VISIBLE);
       toShow.forEach(function (session) {
         sessionList.appendChild(renderSessionRow(session));
       });
       if (!showingAll) {
         var moreBtn = document.createElement("div");
         moreBtn.className = "show-more-btn";
-        moreBtn.textContent = "Show all " + filtered.length + " sessions";
+        moreBtn.textContent = "Show all " + group.sessions.length + " sessions";
         moreBtn.addEventListener("click", function (e) {
           e.stopPropagation();
           showingAll = true;
@@ -232,47 +233,6 @@
     return container;
   }
 
-  function renderChronological(data) {
-    $chronoView.innerHTML = "";
-    // Collect all sessions from all groups, sort by last_active desc
-    var allSessions = [];
-    (data.repo_groups || []).forEach(function (g) {
-      g.sessions.forEach(function (s) { allSessions.push(s); });
-    });
-    (data.non_repo_groups || []).forEach(function (g) {
-      g.sessions.forEach(function (s) { allSessions.push(s); });
-    });
-
-    allSessions = filterSessions(allSessions);
-    allSessions.sort(function (a, b) {
-      return new Date(b.last_active) - new Date(a.last_active);
-    });
-
-    if (allSessions.length === 0) {
-      $chronoView.innerHTML = '<div class="empty-state">No sessions match the current filter.</div>';
-      return;
-    }
-
-    var chronoLimit = 50;
-    var chronoShowAll = allSessions.length <= chronoLimit;
-    var toShow = chronoShowAll ? allSessions : allSessions.slice(0, chronoLimit);
-    toShow.forEach(function (session) {
-      $chronoView.appendChild(renderSessionRow(session));
-    });
-    if (!chronoShowAll) {
-      var moreBtn = document.createElement("div");
-      moreBtn.className = "show-more-btn";
-      moreBtn.textContent = "Show all " + allSessions.length + " sessions";
-      moreBtn.addEventListener("click", function () {
-        $chronoView.innerHTML = "";
-        allSessions.forEach(function (session) {
-          $chronoView.appendChild(renderSessionRow(session));
-        });
-      });
-      $chronoView.appendChild(moreBtn);
-    }
-  }
-
   function render() {
     if (!dashboardData) return;
 
@@ -290,44 +250,36 @@
     }
 
     $emptyState.classList.add("hidden");
+    $chronoView.classList.add("hidden");
+    $repoGroups.classList.remove("hidden");
+    $nonRepoGroups.classList.add("hidden");
 
-    if (currentView === "grouped") {
-      $chronoView.classList.add("hidden");
-      $repoGroups.classList.remove("hidden");
-      $nonRepoGroups.classList.remove("hidden");
+    // Combine repo and non-repo groups into one list sorted by last_active
+    var allGroups = [];
+    (dashboardData.repo_groups || []).forEach(function (g) {
+      allGroups.push({ type: "repo", group: g, last_active: g.last_active });
+    });
+    (dashboardData.non_repo_groups || []).forEach(function (g) {
+      allGroups.push({ type: "non-repo", group: g, last_active: g.last_active });
+    });
+    allGroups.sort(function (a, b) {
+      return new Date(b.last_active) - new Date(a.last_active);
+    });
 
-      // Auto-expand the first repo group on initial render
-      if (expandedRepos.size === 0 && dashboardData.repo_groups.length > 0) {
-        expandedRepos.add(dashboardData.repo_groups[0].repo_root);
-      }
-
-      $repoGroups.innerHTML = "";
-      dashboardData.repo_groups.forEach(function (group) {
-        var el = renderRepoGroup(group);
-        if (el) $repoGroups.appendChild(el);
-      });
-
-      $nonRepoGroups.innerHTML = "";
-      if (hasNonRepos) {
-        var nonRepoEls = [];
-        dashboardData.non_repo_groups.forEach(function (group) {
-          var el = renderNonRepoGroup(group);
-          if (el) nonRepoEls.push(el);
-        });
-        if (nonRepoEls.length > 0) {
-          var sep = document.createElement("div");
-          sep.className = "non-repo-separator";
-          sep.textContent = "\u2014 Sessions outside git repos \u2014";
-          $nonRepoGroups.appendChild(sep);
-          nonRepoEls.forEach(function (el) { $nonRepoGroups.appendChild(el); });
-        }
-      }
-    } else {
-      $repoGroups.classList.add("hidden");
-      $nonRepoGroups.classList.add("hidden");
-      $chronoView.classList.remove("hidden");
-      renderChronological(dashboardData);
+    // Auto-expand the first group on initial render
+    if (expandedRepos.size === 0 && allGroups.length > 0) {
+      var firstGroup = allGroups[0];
+      var expandKey = firstGroup.type === "repo" ? firstGroup.group.repo_root : firstGroup.group.cwd;
+      expandedRepos.add(expandKey);
     }
+
+    $repoGroups.innerHTML = "";
+    allGroups.forEach(function (entry) {
+      var el = entry.type === "repo"
+        ? renderRepoGroup(entry.group)
+        : renderNonRepoGroup(entry.group);
+      if (el) $repoGroups.appendChild(el);
+    });
   }
 
   // --- API ---
@@ -347,9 +299,10 @@
   }
 
   function refreshSessions() {
+    var days = parseInt($scanDays.value, 10) || 7;
     $btnRefresh.classList.add("spinning");
     $btnRefresh.textContent = "Refreshing...";
-    return fetch("/api/refresh")
+    return fetch("/api/refresh?scan_days=" + days)
       .then(function (res) { return res.json(); })
       .then(function (data) {
         dashboardData = data;
@@ -399,18 +352,6 @@
   // --- Event listeners ---
 
   $btnRefresh.addEventListener("click", refreshSessions);
-
-  $filterSource.addEventListener("change", function () {
-    sourceFilter = this.value;
-    render();
-  });
-
-  document.querySelectorAll('input[name="view"]').forEach(function (radio) {
-    radio.addEventListener("change", function () {
-      currentView = this.value;
-      render();
-    });
-  });
 
   // --- Init ---
 

@@ -18,31 +18,13 @@
     </div>
     <div class="header-right">
       <span class="last-scan" id="last-scan">Last scan: --</span>
+      <label class="scan-days-label">
+        <input type="number" id="scan-days" class="scan-days-input" value="7" min="1" max="365">
+        <span class="scan-days-suffix">days</span>
+      </label>
       <button class="btn-refresh" id="btn-refresh" title="Refresh">Refresh</button>
     </div>
   </header>
-
-  <nav class="toolbar">
-    <div class="toolbar-left">
-      <span class="toolbar-label">View:</span>
-      <label class="radio-label">
-        <input type="radio" name="view" value="grouped" checked>
-        Grouped
-      </label>
-      <label class="radio-label">
-        <input type="radio" name="view" value="chronological">
-        Chronological
-      </label>
-    </div>
-    <div class="toolbar-right">
-      <span class="toolbar-label">Filter:</span>
-      <select id="filter-source" class="filter-select">
-        <option value="all">All</option>
-        <option value="claude">Claude</option>
-        <option value="codex">Codex</option>
-      </select>
-    </div>
-  </nav>
 
   <main class="content" id="content">
     <div class="loading" id="loading">Loading sessions...</div>

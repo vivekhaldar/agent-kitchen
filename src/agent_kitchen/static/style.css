@@ -169,73 +169,53 @@ body {
   pointer-events: none;
 }
 
-/* ===== Toolbar ===== */
+/* ===== Scan Days Input ===== */
 
-.toolbar {
+.scan-days-label {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 32px;
-  border-bottom: 1px solid var(--border-light);
-  background: var(--bg-warm);
-  gap: 16px;
-}
-
-.toolbar-left,
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.toolbar-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.radio-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: color var(--transition);
-}
-
-.radio-label:hover {
-  color: var(--text-primary);
-}
-
-.radio-label input[type="radio"] {
-  accent-color: var(--accent-coral);
-}
-
-.filter-select {
-  padding: 5px 12px;
+  gap: 0;
   border: 1.5px solid var(--border);
   border-radius: 100px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-family: var(--font-heading);
-  font-weight: 500;
-  font-size: 12px;
-  cursor: pointer;
+  background: var(--bg-surface);
+  padding: 0 10px 0 0;
   transition: border-color var(--transition);
 }
 
-.filter-select:hover {
+.scan-days-label:focus-within {
   border-color: var(--accent-violet);
+  box-shadow: 0 0 0 3px rgba(155, 143, 204, 0.12);
 }
 
-.filter-select:focus {
+.scan-days-input {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: 42px;
+  padding: 6px 4px 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+.scan-days-input::-webkit-inner-spin-button,
+.scan-days-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.scan-days-input:focus {
   outline: none;
-  border-color: var(--accent-violet);
-  box-shadow: 0 0 0 3px rgba(155, 143, 204, 0.15);
+}
+
+.scan-days-suffix {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-left: 3px;
 }
 
 /* ===== Content ===== */
