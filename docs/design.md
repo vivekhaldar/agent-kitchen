@@ -744,11 +744,16 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 
 ### Phase 6: Polish and packaging
 
-**Task 6.1: Error handling**
-- Handle missing `~/.claude` or `~/.codex` directories gracefully (skip, don't crash).
-- Handle malformed JSONL lines (skip the line, log a warning).
-- Handle LLM auth failures with a clear error message.
-- Handle git command failures (repo deleted, not a git repo, etc.).
+**Task 6.1: Error handling** [DONE]
+- [x] Handle missing `~/.claude` or `~/.codex` directories gracefully (skip, don't crash).
+- [x] Handle malformed JSONL lines (skip the line, log a warning).
+- [x] Handle LLM auth failures with a clear error message.
+- [x] Handle git command failures (repo deleted, not a git repo, etc.).
+- [x] Wrap all git subprocess calls (branch, porcelain, rev-list) in try/except for timeout/OSError.
+- [x] Wrap scanner calls in pipeline with independent try/except so one source failing doesn't block the other.
+- [x] Wrap grouping call in pipeline with try/except for graceful degradation.
+- [x] Add OSError handling to cache load for permission/read failures.
+- [x] Write 16 tests in test_error_handling.py covering all error paths.
 
 **Task 6.2: Packaging for distribution**
 - Ensure `pyproject.toml` has proper metadata (name, version, description, author).

@@ -22,7 +22,7 @@ class SummaryCache:
             with open(self.cache_path) as f:
                 data = json.load(f)
             self.entries = data.get("entries", {})
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, OSError):
             self.entries = {}
 
     def save(self) -> None:

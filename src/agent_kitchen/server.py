@@ -63,9 +63,19 @@ async def run_scan_pipeline() -> dict:
     start = time.monotonic()
     since = datetime.now(timezone.utc) - timedelta(days=SCAN_WINDOW_DAYS)
 
-    # Scan both sources
-    claude_sessions = scan_claude_sessions(since)
-    codex_sessions = scan_codex_sessions(since)
+    # Scan both sources (each scanner is independent — one failing shouldn't block the other)
+    claude_sessions: list = []
+    try:
+        claude_sessions = scan_claude_sessions(since)
+    except Exception:
+        logger.exception("Claude session scan failed")
+
+    codex_sessions: list = []
+    try:
+        codex_sessions = scan_codex_sessions(since)
+    except Exception:
+        logger.exception("Codex session scan failed")
+
     all_sessions = claude_sessions + codex_sessions
 
     logger.info(
@@ -103,7 +113,11 @@ async def run_scan_pipeline() -> dict:
             session.status = result.status
 
     # Group by repo
-    repo_groups, non_repo_groups = group_sessions(all_sessions)
+    try:
+        repo_groups, non_repo_groups = group_sessions(all_sessions)
+    except Exception:
+        logger.exception("Session grouping failed")
+        repo_groups, non_repo_groups = [], []
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
 

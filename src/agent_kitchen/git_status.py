@@ -1,8 +1,11 @@
 # ABOUTME: Git status checker for repositories associated with agent sessions.
 # ABOUTME: Detects repo roots from working directories and queries live git status.
 
+import logging
 import subprocess
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 # Module-level cache for repo root lookups (cwd -> repo_root or None)
 _repo_root_cache: dict[str, str | None] = {}
@@ -61,38 +64,47 @@ def get_git_status(repo_root: str) -> GitStatus | None:
         return None
 
     # Branch name
-    branch_result = subprocess.run(
-        ["git", "-C", repo_root, "branch", "--show-current"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
-    branch = branch_result.stdout.strip() or None
+    branch = None
+    try:
+        branch_result = subprocess.run(
+            ["git", "-C", repo_root, "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        branch = branch_result.stdout.strip() or None
+    except (subprocess.TimeoutExpired, OSError):
+        logger.warning("Failed to get branch for %s", repo_root)
 
     # Porcelain status for dirty + untracked
-    porcelain_result = subprocess.run(
-        ["git", "-C", repo_root, "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
-    porcelain_lines = [line for line in porcelain_result.stdout.splitlines() if line.strip()]
-    untracked = sum(1 for line in porcelain_lines if line.startswith("??"))
-    dirty = any(not line.startswith("??") for line in porcelain_lines)
+    dirty = False
+    untracked = 0
+    try:
+        porcelain_result = subprocess.run(
+            ["git", "-C", repo_root, "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        porcelain_lines = [line for line in porcelain_result.stdout.splitlines() if line.strip()]
+        untracked = sum(1 for line in porcelain_lines if line.startswith("??"))
+        dirty = any(not line.startswith("??") for line in porcelain_lines)
+    except (subprocess.TimeoutExpired, OSError):
+        logger.warning("Failed to get porcelain status for %s", repo_root)
 
     # Unpushed commits (ahead of upstream)
     unpushed = 0
-    rev_list_result = subprocess.run(
-        ["git", "-C", repo_root, "rev-list", "--count", "@{upstream}..HEAD"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
-    if rev_list_result.returncode == 0:
-        try:
+    try:
+        rev_list_result = subprocess.run(
+            ["git", "-C", repo_root, "rev-list", "--count", "@{upstream}..HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if rev_list_result.returncode == 0:
             unpushed = int(rev_list_result.stdout.strip())
-        except ValueError:
-            pass
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
 
     return GitStatus(
         branch=branch,
