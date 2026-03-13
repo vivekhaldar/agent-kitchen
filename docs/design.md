@@ -755,11 +755,12 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 - [x] Add OSError handling to cache load for permission/read failures.
 - [x] Write 16 tests in test_error_handling.py covering all error paths.
 
-**Task 6.2: Packaging for distribution**
-- Ensure `pyproject.toml` has proper metadata (name, version, description, author).
-- Add a README.md with: what it does, how to install, how to run.
-- Verify `uvx agent-kitchen` works for one-command install+run.
-- Test on a clean environment (fresh venv, no prior cache).
+**Task 6.2: Packaging for distribution** [DONE]
+- [x] Ensure `pyproject.toml` has proper metadata (name, version, description, author).
+- [x] Add a README.md with: what it does, how to install, how to run.
+- [x] Verify `uvx agent-kitchen` works for one-command install+run.
+- [x] Test on a clean environment (fresh venv, no prior cache).
+- [x] Move static files into package so they're included in the wheel.
 
 **Task 6.3: GitHub repo setup**
 - Create private repo on GitHub.

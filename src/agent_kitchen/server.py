@@ -227,7 +227,7 @@ def create_app(*, enable_background_refresh: bool = True) -> FastAPI:
             )
 
     # Mount static files (serve index.html at root)
-    static_dir = Path(__file__).parent.parent.parent / "static"
+    static_dir = Path(__file__).parent / "static"
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 

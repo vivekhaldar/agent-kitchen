@@ -7,6 +7,21 @@ name = "agent-kitchen"
 version = "0.1.0"
 description = "Dashboard for monitoring AI coding agent sessions across Claude Code and Codex CLI"
 requires-python = ">=3.12"
+authors = [
+    { name = "Vivek Haldar", email = "vh@vivekhaldar.com" },
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = ["ai", "agent", "dashboard", "claude", "codex"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -15,6 +30,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "pre-commit", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/haldar/agent-kitchen"
+Repository = "https://github.com/haldar/agent-kitchen"
 
 [project.scripts]
 agent-kitchen = "agent_kitchen.cli:main"
