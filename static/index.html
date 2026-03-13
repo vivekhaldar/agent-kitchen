@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Kitchen</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <h1 class="header-title">Agent Kitchen</h1>
+    </div>
+    <div class="header-right">
+      <span class="last-scan" id="last-scan">Last scan: --</span>
+      <button class="btn-refresh" id="btn-refresh" title="Refresh">Refresh</button>
+    </div>
+  </header>
+
+  <nav class="toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-label">View:</span>
+      <label class="radio-label">
+        <input type="radio" name="view" value="grouped" checked>
+        Grouped by repo
+      </label>
+      <label class="radio-label">
+        <input type="radio" name="view" value="chronological">
+        Chronological
+      </label>
+    </div>
+    <div class="toolbar-right">
+      <span class="toolbar-label">Filter:</span>
+      <select id="filter-source" class="filter-select">
+        <option value="all">All</option>
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+      </select>
+    </div>
+  </nav>
+
+  <main class="content" id="content">
+    <div class="loading" id="loading">Loading sessions...</div>
+
+    <!-- Repo groups rendered here by app.js -->
+    <div id="repo-groups"></div>
+
+    <!-- Non-repo groups rendered here by app.js -->
+    <div id="non-repo-groups"></div>
+
+    <!-- Flat chronological view (hidden by default) -->
+    <div id="chrono-view" class="hidden"></div>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="empty-state hidden">
+      No sessions found. Make sure <code>~/.claude</code> or <code>~/.codex</code> directories exist.
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -715,30 +715,32 @@ The frontend polls `GET /api/sessions` every 30 seconds. On each poll:
 
 ### Phase 5: Frontend
 
-**Task 5.1: HTML structure**
-- Build the page layout as described in the Layout section above.
-- Header with title, last-scan time, refresh button.
-- View toggle (grouped / chronological).
-- Source filter (all / claude / codex).
-- Main content area for repo groups and session rows.
+**Task 5.1: HTML structure** [DONE]
+- [x] Build the page layout as described in the Layout section above.
+- [x] Header with title, last-scan time, refresh button.
+- [x] View toggle (grouped / chronological).
+- [x] Source filter (all / claude / codex).
+- [x] Main content area for repo groups and session rows.
 
-**Task 5.2: JavaScript — data fetching and rendering**
-- On page load, fetch `GET /api/sessions`.
-- Render repo groups: collapsible headers with git status badges.
-- Render session rows with all columns.
-- Implement click-to-launch: call `/api/launch`, show brief visual feedback.
-- Implement expand/collapse for repo groups.
-- Implement view toggle (re-render as flat list or grouped).
-- Implement source filter (client-side filter, no API call needed).
-- Auto-refresh every 30 seconds.
+**Task 5.2: JavaScript — data fetching and rendering** [DONE]
+- [x] On page load, fetch `GET /api/sessions`.
+- [x] Render repo groups: collapsible headers with git status badges.
+- [x] Render session rows with all columns (status dot, summary, status label, time ago, source badge).
+- [x] Implement click-to-launch: call `/api/launch`, show brief flash visual feedback.
+- [x] Implement expand/collapse for repo groups (with animated chevron).
+- [x] Implement view toggle (re-render as flat chronological list or grouped by repo).
+- [x] Implement source filter (client-side filter, no API call needed).
+- [x] Auto-refresh every 30 seconds; last-scan display updates every 5 seconds.
+- [x] Auto-expand the first repo group on initial load.
 
-**Task 5.3: CSS styling**
-- Dark theme (dark background, light text — standard dev tool aesthetic).
-- Color-coded status dots and labels as specified.
-- Source badges: "claude" in orange, "codex" in green.
-- Hover effects on session rows.
-- Smooth expand/collapse animation for repo groups.
-- Responsive layout (works at 800px+ width).
+**Task 5.3: CSS styling** [DONE]
+- [x] Dark theme (dark background, light text — Tokyo Night-inspired dev tool aesthetic).
+- [x] Color-coded status dots and labels (blue/cyan for in-progress, amber for waiting, green for done).
+- [x] Source badges: "claude" in orange, "codex" in green.
+- [x] Hover effects on session rows and repo headers.
+- [x] Smooth expand/collapse animation for repo groups (max-height transition).
+- [x] Responsive layout (works at 800px+ width, hides status/time columns on narrow screens).
+- [x] Flash animation on session launch click.
 
 ### Phase 6: Polish and packaging
 
