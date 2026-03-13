@@ -5,6 +5,7 @@ import asyncio
 import dataclasses
 import logging
 import os
+import shlex
 import subprocess
 import time
 from contextlib import asynccontextmanager
@@ -173,7 +174,7 @@ async def run_scan_pipeline() -> dict:
 def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
     """Open a new terminal window with the resume command for a session."""
     if source == "claude":
-        cmd = f"cd {cwd} && unset CLAUDECODE && claude --continue --session-id {session_id}"
+        cmd = f"cd {cwd} && unset CLAUDECODE && claude --resume {session_id}"
     elif source == "codex":
         cmd = f"cd {cwd} && codex resume {session_id}"
     else:
@@ -181,8 +182,11 @@ def _launch_in_terminal(source: str, session_id: str, cwd: str) -> None:
 
     terminal = _config.TERMINAL_APP.lower()
     if terminal == "ghostty":
+        # Use --command config key to tell Ghostty what to run in the new window.
+        # -n opens a new instance (new window); --args passes flags to Ghostty.
+        shell_cmd = f"/bin/zsh -c {shlex.quote(cmd)}"
         subprocess.run(
-            ["open", "-a", "Ghostty", "--args", "-e", cmd],
+            ["open", "-na", "Ghostty", "--args", f"--command={shell_cmd}"],
             check=True,
         )
     elif terminal == "terminal":

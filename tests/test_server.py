@@ -222,7 +222,7 @@ class TestLaunch:
             )
             call_args = mock_run.call_args[0][0]
             cmd = call_args[-1]
-            assert "claude --continue --session-id abc-123" in cmd
+            assert "claude --resume abc-123" in cmd
             assert "cd /Users/test/repos/proj" in cmd
             assert "unset CLAUDECODE" in cmd
 
@@ -255,7 +255,7 @@ class TestLaunch:
             )
             call_args = mock_run.call_args[0][0]
             assert call_args[0] == "open"
-            assert "-a" in call_args
+            assert "-na" in call_args
             assert "Ghostty" in call_args
 
     def test_launch_uses_terminal_app_when_configured(self, client):
