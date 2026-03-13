@@ -10,14 +10,14 @@ requires-python = ">=3.12"
 authors = [
     { name = "Vivek Haldar", email = "vh@vivekhaldar.com" },
 ]
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 readme = "README.md"
 keywords = ["ai", "agent", "dashboard", "claude", "codex"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Web Environment",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Quality Assurance",

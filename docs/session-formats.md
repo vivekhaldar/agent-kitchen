@@ -6,14 +6,14 @@
 
 ```
 ~/.claude/projects/
-├── -Users-haldar-repos-gh-foo/        # Encoded working directory
+├── -Users-jane-repos-gh-foo/        # Encoded working directory
 │   ├── a8356e6b-....jsonl             # Interactive session (UUID filename)
 │   ├── 442d11c1-....jsonl
 │   └── a1af50ee-.../                  # Parent session directory
 │       └── subagents/
 │           ├── agent-ab1a7922c....jsonl      # Spawned subagent
 │           └── agent-acompact-2985....jsonl  # Compaction sidechain
-├── -Users-haldar-MAIL/
+├── -Users-jane-MAIL/
 │   └── ...
 ```
 

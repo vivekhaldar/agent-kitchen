@@ -21,26 +21,36 @@ CODEX_SESSIONS_DIR = Path("~/.codex/sessions").expanduser()
 CODEX_INDEX_PATH = Path("~/.codex/session_index.jsonl").expanduser()
 
 
-def get_claude_token() -> str:
-    """Retrieve Claude subscription token from the pass password manager."""
+def setup_auth() -> None:
+    """Set up authentication for the Claude Agent SDK.
+
+    Checks for credentials in this order:
+    1. ANTHROPIC_API_KEY environment variable (standard API key)
+    2. CLAUDE_CODE_OAUTH_TOKEN environment variable (Max subscription token)
+    3. `pass` password manager at dev/CLAUDE_SUBSCRIPTION_TOKEN (fallback)
+
+    Raises RuntimeError if no credentials are found.
+    """
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        logger.info("Auth configured via ANTHROPIC_API_KEY")
+        return
+
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        logger.info("Auth configured via CLAUDE_CODE_OAUTH_TOKEN")
+        return
+
+    # Fallback: try the `pass` password manager
     result = subprocess.run(
         ["pass", "dev/CLAUDE_SUBSCRIPTION_TOKEN"],
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        logger.warning("pass returned exit code %d: %s", result.returncode, result.stderr.strip())
-        raise RuntimeError(
-            "Failed to retrieve Claude token from pass. "
-            "Ensure `pass dev/CLAUDE_SUBSCRIPTION_TOKEN` is set."
-        )
-    return result.stdout.strip()
+    if result.returncode == 0 and result.stdout.strip():
+        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = result.stdout.strip()
+        logger.info("Auth configured via pass password manager")
+        return
 
-
-def setup_auth() -> None:
-    """Set up authentication for the Claude Agent SDK via Max subscription."""
-    token = get_claude_token()
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = token
-    # Unset API key to avoid billing the API account instead of using Max subscription
-    os.environ.pop("ANTHROPIC_API_KEY", None)
-    logger.info("Auth configured via Max subscription token")
+    raise RuntimeError(
+        "No Claude API credentials found. Set ANTHROPIC_API_KEY or "
+        "CLAUDE_CODE_OAUTH_TOKEN environment variable."
+    )

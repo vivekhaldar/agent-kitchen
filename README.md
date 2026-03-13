@@ -1,93 +1,111 @@
 # Agent Kitchen
 
-A locally-running web dashboard that gives you a unified view of all your AI coding agent sessions across Claude Code and Codex CLI.
+**A unified dashboard for all your AI coding agent sessions.**
 
-## What it does
+If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex), you've probably lost track of what's happening across your sessions. Which repos have active work? What was that session doing? Where did you leave off?
 
-- Scans `~/.claude` and `~/.codex` for interactive session data (filters out programmatic SDK calls)
-- Uses Claude Haiku to generate one-line summaries and classify session status
-- Groups sessions by git repo, sorted by most recent activity
-- Shows live git status (branch, dirty files, unpushed commits) per repo
-- Click any session to resume it in a new terminal window
+Agent Kitchen scans your local session files, groups them by git repo, and gives you a single view of everything — with LLM-generated summaries, live git status, and one-click resume.
 
-## Install
+## Features
+
+- **Unified view** — Claude Code and Codex CLI sessions in one dashboard, grouped by git repo
+- **LLM summaries** — Claude Haiku generates one-line summaries and classifies each session's status (done, in progress, waiting for input)
+- **Live git status** — see the current branch, dirty files, and unpushed commits per repo
+- **One-click resume** — click any session to resume it in a terminal window
+- **Fuzzy search** — press `/` to search across all sessions
+- **Browser terminal** — resume sessions directly in a browser-based terminal (xterm.js)
+- **Fast startup** — shows cached/fallback summaries instantly, upgrades to LLM summaries in the background
+- **No build step** — vanilla HTML/JS/CSS frontend, zero npm dependencies
+
+## Quick Start
 
 ```bash
-uvx agent-kitchen
+# Run directly — no install needed
+uvx agent-kitchen web
+
+# Or install it
+uv pip install agent-kitchen
+agent-kitchen web
 ```
 
-Or install from source:
-
-```bash
-git clone https://github.com/haldar/agent-kitchen.git
-cd agent-kitchen
-uv pip install -e .
-agent-kitchen
-```
+The dashboard opens at `http://localhost:8099`.
 
 ## Usage
 
 ```bash
 # Start the dashboard (opens browser automatically)
-agent-kitchen
+agent-kitchen web
 
 # Custom port
-agent-kitchen --port 9000
+agent-kitchen web --port 9000
 
 # Scan further back in history
-agent-kitchen --scan-days 90
+agent-kitchen web --scan-days 90
 
 # Don't auto-open the browser
-agent-kitchen --no-open
+agent-kitchen web --no-open
 
-# Use cached summaries only (no LLM calls, no background refresh)
-agent-kitchen --no-summarize
+# Enable background LLM summarization
+agent-kitchen web --summarize
 ```
 
-The dashboard runs at `http://localhost:8099` by default.
+### Pre-indexing summaries
 
-## Indexing sessions
-
-The dashboard shows fallback summaries (first user message) on startup, then upgrades to LLM-generated summaries in the background. For faster startup with pre-computed summaries, run the indexer first:
+By default, the dashboard shows fallback summaries (the first user message). To get LLM-generated summaries, either pass `--summarize` to the web command, or pre-index with:
 
 ```bash
-# Index all sessions from the last 60 days (default)
-agent-kitchen-index
-
-# Index a specific time range
-agent-kitchen-index --scan-days 30
+# Index all sessions from the last 60 days
+agent-kitchen index
 
 # See what would be indexed without making LLM calls
-agent-kitchen-index --dry-run
+agent-kitchen index --dry-run
 
 # Re-index everything, ignoring cache
-agent-kitchen-index --force
+agent-kitchen index --force
 
 # Control LLM concurrency (default: 3)
-agent-kitchen-index --concurrency 5
+agent-kitchen index --concurrency 5
 ```
 
-The indexer logs progress to stderr so you can watch it work. Summaries are cached at `~/.cache/agent-kitchen/summaries.json` and shared with the dashboard.
+Summaries are cached at `~/.cache/agent-kitchen/summaries.json` and shared between the indexer and the dashboard.
 
-## Authentication
+## Authentication (for LLM summaries)
 
-The summarizer uses Claude Haiku via the Claude Agent SDK, authenticated through a Max subscription. The token is retrieved from the `pass` password manager:
+LLM-powered summaries require a Claude API credential. Agent Kitchen checks for credentials in this order:
+
+1. `ANTHROPIC_API_KEY` environment variable — standard Anthropic API key
+2. `CLAUDE_CODE_OAUTH_TOKEN` environment variable — Claude Max subscription token
+3. `pass` password manager at `dev/CLAUDE_SUBSCRIPTION_TOKEN` — fallback for `pass` users
 
 ```bash
-pass dev/CLAUDE_SUBSCRIPTION_TOKEN
+# Option 1: API key
+export ANTHROPIC_API_KEY=sk-ant-...
+agent-kitchen web --summarize
+
+# Option 2: Max subscription token
+export CLAUDE_CODE_OAUTH_TOKEN=...
+agent-kitchen web --summarize
 ```
 
-If the token isn't available, the dashboard still works — sessions are displayed without LLM-generated summaries.
+If no credentials are found, the dashboard still works — you just won't get LLM-generated summaries.
 
 ## Configuration
 
-Environment variable overrides:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
+| Environment Variable | Default | Description |
+|---|---|---|
 | `AGENT_KITCHEN_PORT` | `8099` | Server port |
 | `AGENT_KITCHEN_SCAN_DAYS` | `60` | Days of history to scan |
 | `AGENT_KITCHEN_REFRESH_INTERVAL` | `60` | Background rescan interval (seconds) |
+| `AGENT_KITCHEN_TERMINAL` | `ghostty` | Terminal app for session launch (`ghostty` or `terminal`) |
+
+## Session Filtering
+
+Only interactive sessions are shown. The scanner filters out:
+
+- **Programmatic SDK sessions** — single-shot calls with ≤1 user turn (e.g., automated summarization pipelines)
+- **Subagent sessions** — child sessions spawned by the Agent tool, stored in `subagents/` subdirectories
+
+See [docs/session-formats.md](docs/session-formats.md) for details on session file formats.
 
 ## Development
 
@@ -104,19 +122,12 @@ uvx ruff check --fix .
 uvx ruff format .
 ```
 
-## Session filtering
-
-Only interactive sessions are shown. The scanner filters out:
-
-- **Programmatic SDK sessions** — single-shot calls with ≤1 user turn (e.g., email classification, automated summarization). These are created by the Claude Agent SDK but aren't interactive coding sessions.
-- **Subagent sessions** — child sessions spawned by the Agent tool, stored in `subagents/` subdirectories.
-
-Context compaction (when a session's context window fills up) does NOT create a new session — the same file continues to be used. However, `claude --continue` / `claude --resume` creates a new independent session file with no linking metadata.
-
-See [docs/session-formats.md](docs/session-formats.md) for details on session file formats and filtering logic.
-
 ## Requirements
 
 - Python 3.12+
-- macOS (session launch uses Terminal.app via AppleScript)
-- `pass` password manager with `dev/CLAUDE_SUBSCRIPTION_TOKEN` entry (for LLM summaries)
+- macOS (terminal launch uses AppleScript; the dashboard itself works anywhere)
+- `~/.claude` and/or `~/.codex` directories with session data
+
+## License
+
+Apache 2.0 — see [LICENSE](LICENSE).

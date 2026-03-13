@@ -20,7 +20,7 @@ def decode_claude_project_path(dirname: str) -> str:
 
     The directory name encodes the working directory path with `-` as separator.
     The leading `-` maps to `/`, and each subsequent `-` maps to `/`.
-    Example: "-Users-haldar-repos-gh-foo" → "/Users/haldar/repos/gh/foo"
+    Example: "-Users-jane-repos-myproject" → "/Users/jane/repos/myproject"
     """
     return dirname.replace("-", "/")
 

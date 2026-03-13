@@ -11,3 +11,5 @@ venv/
 .cache/
 .pytest_cache/
 .ruff_cache/
+.env
+.env.*

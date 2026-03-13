@@ -33,11 +33,11 @@ A locally-running web dashboard that:
 **Directory structure:**
 ```
 ~/.claude/projects/
-├── -Users-haldar/                              # URL-encoded working directory
+├── -Users-jane/                              # URL-encoded working directory
 │   ├── a8356e6b-....jsonl                      # Session file (UUID name)
 │   ├── 442d11c1-....jsonl
 │   └── a1af50ee-.../subagents/agent-xxx.jsonl  # Subagent sessions (ignore these)
-├── -Users-haldar-repos-gh-skillrunner/
+├── -Users-jane-repos-gh-skillrunner/
 │   └── ...
 ```
 
@@ -64,7 +64,7 @@ A locally-running web dashboard that:
 - The `slug` field provides a human-readable name.
 
 **How to map to a project directory:**
-- The parent directory name is a URL-encoded path. Decode it: `-Users-haldar-repos-gh-foo` → `/Users/haldar/repos/gh/foo`.
+- The parent directory name is a URL-encoded path. Decode it: `-Users-jane-repos-gh-foo` → `/Users/jane/repos/gh/foo`.
 - Also available in the `cwd` field of each record.
 
 **How to get timestamps:**
@@ -226,27 +226,13 @@ The subscription token is stored in the `pass` password manager:
 pass dev/CLAUDE_SUBSCRIPTION_TOKEN
 ```
 
-At startup, the app retrieves the token by running `pass dev/CLAUDE_SUBSCRIPTION_TOKEN` and sets it as `CLAUDE_CODE_OAUTH_TOKEN` in the process environment before initializing the Agent SDK. This is handled in `config.py`:
+At startup, `setup_auth()` in `config.py` checks for credentials in this order:
 
-```python
-import subprocess
+1. `ANTHROPIC_API_KEY` environment variable (standard API key)
+2. `CLAUDE_CODE_OAUTH_TOKEN` environment variable (Max subscription token)
+3. `pass` password manager at `dev/CLAUDE_SUBSCRIPTION_TOKEN` (fallback)
 
-def get_claude_token() -> str:
-    result = subprocess.run(
-        ["pass", "dev/CLAUDE_SUBSCRIPTION_TOKEN"],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            "Failed to retrieve Claude token from pass. "
-            "Ensure `pass dev/CLAUDE_SUBSCRIPTION_TOKEN` is set."
-        )
-    return result.stdout.strip()
-```
-
-**Important**: If `ANTHROPIC_API_KEY` is also set in the environment, the SDK will use that (and bill the API account) instead of the Max subscription. The app should unset `ANTHROPIC_API_KEY` from the process environment at startup to avoid this.
-
-At startup, verify auth is working by making a trivial Haiku call. If it fails, print a clear error message referencing the `pass` entry.
+If no credentials are found, the app raises a `RuntimeError` with a clear message.
 
 ---
 
@@ -270,7 +256,7 @@ def scan_claude_sessions(since: datetime) -> Iterator[Session]:
     4. Count lines where type is "user" or "assistant" to get turn_count.
     5. Skip files inside subagents/ directories.
     6. Decode the parent directory name to recover the project path:
-       "-Users-haldar-repos-gh-foo" → "/Users/haldar/repos/gh/foo"
+       "-Users-jane-repos-gh-foo" → "/Users/jane/repos/gh/foo"
        (Replace leading "-" with "/", then replace remaining "-" with "/")
 
     Yield a Session with source="claude", summary="" (to be filled by summarizer).
@@ -280,7 +266,7 @@ def scan_claude_sessions(since: datetime) -> Iterator[Session]:
 **Path decoding detail:** The encoded directory name uses `-` as separator. To decode:
 - The directory name starts with `-`, which maps to `/`.
 - Each subsequent `-` maps to `/`.
-- Example: `-Users-haldar-repos-gh-foo` → `/Users/haldar/repos/gh/foo`.
+- Example: `-Users-jane-repos-gh-foo` → `/Users/jane/repos/gh/foo`.
 - Edge case: directory names with actual hyphens. Cross-reference with the `cwd` field from the first record to handle this correctly.
 
 **Reading first/last line efficiently:**
@@ -558,7 +544,7 @@ These are defaults. Allow overriding via environment variables:
 │  ▶ agent-kitchen  (main, clean)                        1h ago   │
 │                                                                  │
 │  ── Sessions outside git repos ──                               │
-│  ▶ /Users/haldar  (3 sessions)                         2d ago   │
+│  ▶ /Users/jane  (3 sessions)                         2d ago   │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
