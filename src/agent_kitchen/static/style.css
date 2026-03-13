@@ -463,9 +463,36 @@ body {
 }
 
 .repo-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.btn-new-session {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.btn-new-session:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 /* ===== Session List ===== */

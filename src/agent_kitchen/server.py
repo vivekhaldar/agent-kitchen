@@ -51,15 +51,21 @@ async def _open_browser_when_ready():
 
 
 def _spawn_pty(
-    source: str, session_id: str, cwd: str, cols: int = 120, rows: int = 30
+    source: str, session_id: str | None, cwd: str, cols: int = 120, rows: int = 30
 ) -> tuple[str, PtyProcess]:
-    """Spawn a PTY running the resume command for a session."""
-    if source == "claude":
-        shell_cmd = f"unset CLAUDECODE && claude --resume {shlex.quote(session_id)}"
-    elif source == "codex":
-        shell_cmd = f"codex resume {shlex.quote(session_id)}"
+    """Spawn a PTY running a session command.
+
+    If session_id is provided, resume that session. Otherwise start a new one.
+    """
+    if session_id:
+        if source == "claude":
+            shell_cmd = f"unset CLAUDECODE && claude --resume {shlex.quote(session_id)}"
+        elif source == "codex":
+            shell_cmd = f"codex resume {shlex.quote(session_id)}"
+        else:
+            raise ValueError(f"Unknown source: {source}")
     else:
-        raise ValueError(f"Unknown source: {source}")
+        shell_cmd = "unset CLAUDECODE && claude"
 
     env = {**os.environ, "TERM": "xterm-256color"}
     env.pop("CLAUDECODE", None)
@@ -392,7 +398,16 @@ def create_app(
         source = ws.query_params.get("source", "")
         session_id = ws.query_params.get("session_id", "")
         cwd = ws.query_params.get("cwd", "")
-        if source not in ("claude", "codex") or not session_id or not cwd:
+        mode = ws.query_params.get("mode", "resume")
+
+        if mode == "new":
+            # New session only needs cwd; source defaults to claude
+            source = source or "claude"
+            session_id = None
+            if not cwd:
+                await ws.close(code=1008, reason="Missing cwd for new session")
+                return
+        elif source not in ("claude", "codex") or not session_id or not cwd:
             await ws.close(code=1008, reason="Missing or invalid query params")
             return
 

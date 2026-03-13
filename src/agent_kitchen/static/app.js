@@ -183,7 +183,10 @@
       '<span class="repo-name">' + escapeHtml(group.repo_name) + "</span>" +
       '<span class="repo-meta">(' + metaParts.join(", ") + ")</span>" +
       "</div>" +
-      '<div class="repo-header-right">' + timeAgo(group.last_active) + "</div>";
+      '<div class="repo-header-right">' +
+      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.repo_root) + '">+</button>' +
+      timeAgo(group.last_active) +
+      "</div>";
 
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
@@ -211,6 +214,11 @@
       }
     }
     renderVisibleSessions();
+
+    header.querySelector(".btn-new-session").addEventListener("click", function (e) {
+      e.stopPropagation();
+      openNewSession(group.repo_root);
+    });
 
     header.addEventListener("click", function () {
       if (expandedRepos.has(group.repo_root)) {
@@ -255,7 +263,10 @@
       '<span class="repo-name">' + escapeHtml(displayName) + "</span>" +
       '<span class="repo-meta">(' + filteredSessions.length + " sessions)</span>" +
       "</div>" +
-      '<div class="repo-header-right">' + timeAgo(group.last_active) + "</div>";
+      '<div class="repo-header-right">' +
+      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.cwd) + '">+</button>' +
+      timeAgo(group.last_active) +
+      "</div>";
 
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
@@ -282,6 +293,11 @@
       }
     }
     renderVisibleSessions();
+
+    header.querySelector(".btn-new-session").addEventListener("click", function (e) {
+      e.stopPropagation();
+      openNewSession(group.cwd);
+    });
 
     header.addEventListener("click", function () {
       if (expandedRepos.has(group.cwd)) {
@@ -400,6 +416,60 @@
     rowEl.classList.add("launched");
     setTimeout(function () { rowEl.classList.remove("launched"); }, 500);
     openTerminal(session);
+  }
+
+  function openNewSession(cwd) {
+    closeTerminal();
+
+    $terminalPanel.classList.remove("hidden");
+    document.body.classList.add("terminal-open");
+
+    var term = new Terminal({
+      fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+      fontSize: 13,
+      theme: {
+        background: "#111111",
+        foreground: "#FAFAFA",
+        cursor: "#FF4D00",
+      },
+      cursorBlink: true,
+    });
+
+    var fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+    term.open($terminalContainer);
+    fitAddon.fit();
+
+    var params = new URLSearchParams({ mode: "new", cwd: cwd });
+    var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    var wsUrl = wsProtocol + "//" + location.host + "/ws/terminal?" + params.toString();
+    var ws = new WebSocket(wsUrl);
+
+    ws.onopen = function () {
+      ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+      term.focus();
+    };
+
+    ws.onmessage = function (evt) { term.write(evt.data); };
+    ws.onclose = function () { term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n"); };
+
+    term.onData(function (data) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    });
+
+    term.onResize(function (size) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "resize", cols: size.cols, rows: size.rows }));
+      }
+    });
+
+    window.addEventListener("resize", handleTerminalResize);
+
+    var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
+    $terminalTitle.textContent = "New session in " + displayName;
+    activeTerminal = { term: term, ws: ws, fitAddon: fitAddon };
   }
 
   // --- Terminal ---
