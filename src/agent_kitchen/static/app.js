@@ -418,11 +418,86 @@
     openTerminal(session);
   }
 
-  function openNewSession(cwd) {
-    closeTerminal();
+  // --- Terminal Tabs ---
 
-    $terminalPanel.classList.remove("hidden");
-    document.body.classList.add("terminal-open");
+  var terminals = {};       // tabId → tabData
+  var activeTabId = null;
+  var tabIdCounter = 0;
+  var resizeListenerAttached = false;
+
+  var $terminalPanel = document.getElementById("terminal-panel");
+  var $terminalContainer = document.getElementById("terminal-container");
+  var $terminalTabs = document.getElementById("terminal-tabs");
+  var $terminalClose = document.getElementById("terminal-close");
+
+  function generateTabId() {
+    return "tab-" + (tabIdCounter++);
+  }
+
+  function renderTabs() {
+    $terminalTabs.innerHTML = "";
+    var ids = Object.keys(terminals);
+    ids.forEach(function (tabId) {
+      var tab = terminals[tabId];
+      var el = document.createElement("div");
+      el.className = "terminal-tab" + (tabId === activeTabId ? " active" : "") + (tab.ended ? " ended" : "");
+      el.innerHTML =
+        '<span class="terminal-tab-title">' + escapeHtml(tab.title) + '</span>' +
+        '<span class="terminal-tab-close">&times;</span>';
+
+      el.querySelector(".terminal-tab-title").addEventListener("click", function () {
+        switchTab(tabId);
+      });
+      el.querySelector(".terminal-tab-close").addEventListener("click", function (e) {
+        e.stopPropagation();
+        closeTab(tabId);
+      });
+
+      $terminalTabs.appendChild(el);
+    });
+  }
+
+  function switchTab(tabId) {
+    if (!terminals[tabId]) return;
+    if (activeTabId && terminals[activeTabId]) {
+      terminals[activeTabId].container.classList.remove("active");
+    }
+    activeTabId = tabId;
+    terminals[tabId].container.classList.add("active");
+    terminals[tabId].fitAddon.fit();
+    terminals[tabId].term.focus();
+    renderTabs();
+  }
+
+  function closeTab(tabId) {
+    var tab = terminals[tabId];
+    if (!tab) return;
+    tab.ws.close();
+    tab.term.dispose();
+    tab.container.remove();
+    delete terminals[tabId];
+
+    if (activeTabId === tabId) {
+      var remaining = Object.keys(terminals);
+      if (remaining.length > 0) {
+        switchTab(remaining[remaining.length - 1]);
+      } else {
+        activeTabId = null;
+        $terminalPanel.classList.add("hidden");
+        document.body.classList.remove("terminal-open");
+        window.removeEventListener("resize", handleTerminalResize);
+        resizeListenerAttached = false;
+      }
+    }
+    renderTabs();
+  }
+
+  function createTerminalTab(title, wsParams, sessionId) {
+    var tabId = generateTabId();
+
+    var container = document.createElement("div");
+    container.className = "terminal-tab-container";
+    $terminalContainer.appendChild(container);
 
     var term = new Terminal({
       fontFamily: '"JetBrains Mono", "SF Mono", monospace',
@@ -439,21 +514,51 @@
     term.loadAddon(fitAddon);
     term.loadAddon(new WebLinksAddon.WebLinksAddon());
 
-    term.open($terminalContainer);
+    term.open(container);
+
+    var tabData = {
+      id: tabId,
+      term: term,
+      ws: null,
+      fitAddon: fitAddon,
+      container: container,
+      title: title,
+      ended: false,
+      sessionId: sessionId,
+    };
+    terminals[tabId] = tabData;
+
+    $terminalPanel.classList.remove("hidden");
+    document.body.classList.add("terminal-open");
+
+    // Hide previous active tab, show this one
+    if (activeTabId && terminals[activeTabId]) {
+      terminals[activeTabId].container.classList.remove("active");
+    }
+    activeTabId = tabId;
+    container.classList.add("active");
     fitAddon.fit();
 
-    var params = new URLSearchParams({ mode: "new", cwd: cwd });
+    var params = new URLSearchParams(wsParams);
     var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
     var wsUrl = wsProtocol + "//" + location.host + "/ws/terminal?" + params.toString();
     var ws = new WebSocket(wsUrl);
+    tabData.ws = ws;
 
     ws.onopen = function () {
       ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       term.focus();
     };
 
-    ws.onmessage = function (evt) { term.write(evt.data); };
-    ws.onclose = function () { term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n"); };
+    ws.onmessage = function (evt) {
+      term.write(evt.data);
+    };
+
+    ws.onclose = function () {
+      term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+      tabData.ended = true;
+      renderTabs();
+    };
 
     term.onData(function (data) {
       if (ws.readyState === WebSocket.OPEN) ws.send(data);
@@ -465,111 +570,45 @@
       }
     });
 
-    window.addEventListener("resize", handleTerminalResize);
+    if (!resizeListenerAttached) {
+      window.addEventListener("resize", handleTerminalResize);
+      resizeListenerAttached = true;
+    }
 
-    var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
-    $terminalTitle.textContent = "New session in " + displayName;
-    activeTerminal = { term: term, ws: ws, fitAddon: fitAddon };
+    renderTabs();
+    return tabId;
   }
 
-  // --- Terminal ---
-
-  var activeTerminal = null; // { term, ws, fitAddon }
-  var $terminalPanel = document.getElementById("terminal-panel");
-  var $terminalContainer = document.getElementById("terminal-container");
-  var $terminalTitle = document.getElementById("terminal-title");
-  var $terminalClose = document.getElementById("terminal-close");
-
   function openTerminal(session) {
-    closeTerminal();
-
-    $terminalPanel.classList.remove("hidden");
-    document.body.classList.add("terminal-open");
-
-    var term = new Terminal({
-      fontFamily: '"JetBrains Mono", "SF Mono", monospace',
-      fontSize: 13,
-      theme: {
-        background: "#111111",
-        foreground: "#FAFAFA",
-        cursor: "#FF4D00",
-      },
-      cursorBlink: true,
-    });
-
-    var fitAddon = new FitAddon.FitAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(new WebLinksAddon.WebLinksAddon());
-
-    term.open($terminalContainer);
-    fitAddon.fit();
-
-    var params = new URLSearchParams({
+    // If this session already has a tab, switch to it
+    var ids = Object.keys(terminals);
+    for (var i = 0; i < ids.length; i++) {
+      if (terminals[ids[i]].sessionId === session.id) {
+        switchTab(ids[i]);
+        return;
+      }
+    }
+    createTerminalTab(sessionLabel(session), {
       source: session.source,
       session_id: session.id,
       cwd: session.cwd,
-    });
-    var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-    var wsUrl = wsProtocol + "//" + location.host + "/ws/terminal?" + params.toString();
-    var ws = new WebSocket(wsUrl);
+    }, session.id);
+  }
 
-    ws.onopen = function () {
-      ws.send(JSON.stringify({
-        type: "resize",
-        cols: term.cols,
-        rows: term.rows,
-      }));
-      term.focus();
-    };
-
-    ws.onmessage = function (evt) {
-      term.write(evt.data);
-    };
-
-    ws.onclose = function () {
-      term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
-    };
-
-    term.onData(function (data) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
-      }
-    });
-
-    term.onResize(function (size) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "resize",
-          cols: size.cols,
-          rows: size.rows,
-        }));
-      }
-    });
-
-    window.addEventListener("resize", handleTerminalResize);
-
-    $terminalTitle.textContent = sessionLabel(session);
-    activeTerminal = { term: term, ws: ws, fitAddon: fitAddon };
+  function openNewSession(cwd) {
+    var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
+    createTerminalTab("New: " + displayName, { mode: "new", cwd: cwd }, null);
   }
 
   function handleTerminalResize() {
-    if (activeTerminal) {
-      activeTerminal.fitAddon.fit();
+    if (activeTabId && terminals[activeTabId]) {
+      terminals[activeTabId].fitAddon.fit();
     }
   }
 
-  function closeTerminal() {
-    if (!activeTerminal) return;
-    activeTerminal.ws.close();
-    activeTerminal.term.dispose();
-    activeTerminal = null;
-    $terminalPanel.classList.add("hidden");
-    document.body.classList.remove("terminal-open");
-    $terminalContainer.innerHTML = "";
-    window.removeEventListener("resize", handleTerminalResize);
-  }
-
-  $terminalClose.addEventListener("click", closeTerminal);
+  $terminalClose.addEventListener("click", function () {
+    if (activeTabId) closeTab(activeTabId);
+  });
 
   // --- Last scan timer ---
 
@@ -754,7 +793,7 @@
   document.addEventListener("keydown", function (e) {
     // Don't trigger if typing in an input, textarea, or terminal is focused
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-    if (activeTerminal) return;
+    if (activeTabId) return;
     if (e.key === "/") {
       e.preventDefault();
       openSearch();

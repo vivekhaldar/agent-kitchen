@@ -689,17 +689,75 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: 0 8px 0 0;
   background: #1a1a1a;
   border-bottom: 1px solid #333;
   flex-shrink: 0;
 }
 
-.terminal-panel-title {
+.terminal-tabs {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 1px;
+}
+
+.terminal-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: #999;
+  color: #777;
+  cursor: pointer;
   white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.terminal-tab:hover {
+  color: #ccc;
+  background: #222;
+}
+
+.terminal-tab.active {
+  color: #ccc;
+  background: #111111;
+  border-bottom-color: var(--accent);
+}
+
+.terminal-tab.ended {
+  color: #555;
+  text-decoration: line-through;
+}
+
+.terminal-tab-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.terminal-tab-close:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.terminal-tab-title {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -720,8 +778,18 @@ body {
 
 #terminal-container {
   flex: 1;
-  padding: 4px;
   overflow: hidden;
+  position: relative;
+}
+
+.terminal-tab-container {
+  display: none;
+  position: absolute;
+  inset: 4px;
+}
+
+.terminal-tab-container.active {
+  display: block;
 }
 
 body.terminal-open .content {
