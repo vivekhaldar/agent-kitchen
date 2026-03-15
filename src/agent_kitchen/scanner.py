@@ -14,6 +14,22 @@ from agent_kitchen.models import Session
 
 logger = logging.getLogger(__name__)
 
+_SUMMARIZER_PROMPT_SIGNATURE = "You are analyzing a coding agent session"
+
+
+def _extract_message_text(record: dict) -> str:
+    """Extract text from a record's message content (string or content-block array)."""
+    content = record.get("message", {}).get("content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return ""
+
 
 def decode_claude_project_path(dirname: str) -> str:
     """Decode a Claude project directory name to a filesystem path.
@@ -88,6 +104,7 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
     last_active = None
     turn_count = 0
     user_turn_count = 0
+    first_user_text = None
 
     # Scan all records for metadata and turn count
     for line in lines:
@@ -110,6 +127,8 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
 
         if record_type == "user":
             user_turn_count += 1
+            if first_user_text is None:
+                first_user_text = _extract_message_text(record)
             # Extract metadata from user records
             if cwd is None:
                 cwd = record.get("cwd")
@@ -125,6 +144,11 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
     # Sessions with ≤2 user turns are programmatic (SDK calls, not interactive).
     # SDK structured-output calls produce exactly 2 user records: the prompt + tool result.
     if user_turn_count <= 2:
+        return None
+
+    # Filter out summarizer sessions that slipped past the turn-count filter.
+    # The summarizer prompt always starts with a known signature string.
+    if first_user_text and _SUMMARIZER_PROMPT_SIGNATURE in first_user_text:
         return None
 
     # Fall back to decoded directory name for cwd if not in records

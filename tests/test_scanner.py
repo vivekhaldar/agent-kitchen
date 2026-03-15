@@ -257,6 +257,137 @@ def test_scan_claude_sessions_filters_non_interactive(tmp_path):
     assert sessions[0].id == "interactive-session"
 
 
+def test_scan_claude_sessions_filters_summarizer_sessions(tmp_path):
+    """Summarizer sessions (prompt starts with known signature) should be filtered out."""
+    project_dir = tmp_path / "-Users-test"
+    project_dir.mkdir()
+
+    import json
+
+    # Summarizer session with 3 user turns (slips past turn-count filter)
+    summarizer_file = project_dir / "summarizer-session.jsonl"
+    summarizer_lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:00:00Z",
+                "sessionId": "summarizer-session",
+                "cwd": "/Users/test/repos/agent-kitchen",
+                "message": {
+                    "content": (
+                        "You are analyzing a coding agent session to generate a brief summary."
+                    )
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:00:30Z",
+                "sessionId": "summarizer-session",
+                "message": {"content": "Analyzing..."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:01:00Z",
+                "sessionId": "summarizer-session",
+                "cwd": "/Users/test/repos/agent-kitchen",
+                "message": {"content": "[tool result]"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:01:30Z",
+                "sessionId": "summarizer-session",
+                "message": {"content": "Summary generated."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:02:00Z",
+                "sessionId": "summarizer-session",
+                "cwd": "/Users/test/repos/agent-kitchen",
+                "message": {"content": "[tool result 2]"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:02:30Z",
+                "sessionId": "summarizer-session",
+                "message": {"content": '{"summary": "test", "status": "done"}'},
+            }
+        ),
+    ]
+    summarizer_file.write_text("\n".join(summarizer_lines) + "\n")
+
+    # Normal interactive session (should be kept)
+    interactive_file = project_dir / "interactive-session.jsonl"
+    interactive_lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:00:00Z",
+                "sessionId": "interactive-session",
+                "cwd": "/Users/test/repos/agent-kitchen",
+                "message": {"content": "Fix the bug in scanner.py"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:01:00Z",
+                "sessionId": "interactive-session",
+                "message": {"content": "Looking at it..."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:02:00Z",
+                "sessionId": "interactive-session",
+                "cwd": "/Users/test/repos/agent-kitchen",
+                "message": {"content": "Also add a test"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:03:00Z",
+                "sessionId": "interactive-session",
+                "message": {"content": "Done."},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "timestamp": "2026-03-01T10:04:00Z",
+                "sessionId": "interactive-session",
+                "cwd": "/Users/test/repos/agent-kitchen",
+                "message": {"content": "Looks good"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-01T10:05:00Z",
+                "sessionId": "interactive-session",
+                "message": {"content": "Great!"},
+            }
+        ),
+    ]
+    interactive_file.write_text("\n".join(interactive_lines) + "\n")
+
+    since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    sessions = scan_claude_sessions(since, projects_dir=tmp_path)
+    assert len(sessions) == 1
+    assert sessions[0].id == "interactive-session"
+
+
 def test_scan_claude_sessions_missing_directory(tmp_path):
     """Scanner should return empty list for non-existent directory."""
     missing = tmp_path / "nonexistent"
