@@ -56,3 +56,4 @@ class NonRepoGroup:
     cwd: str
     sessions: list[Session] = field(default_factory=list)
     last_active: datetime = field(default_factory=lambda: datetime.min)
+    timeline: list[TimelinePhase] = field(default_factory=list)

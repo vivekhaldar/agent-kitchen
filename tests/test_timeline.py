@@ -13,7 +13,7 @@ from agent_kitchen.timeline import (
     apply_cached_timelines,
     batch_generate_timelines,
     fallback_timeline,
-    generate_repo_timeline,
+    generate_group_timeline,
 )
 
 
@@ -176,7 +176,7 @@ class TestGenerateRepoTimeline:
                 _make_session(session_id="s2", summary="Add test"),
             ]
         )
-        phases = await generate_repo_timeline(group)
+        phases = await generate_group_timeline(group)
         assert len(phases) == 1
         assert phases[0].session_count == 2
 
@@ -205,7 +205,7 @@ class TestGenerateRepoTimeline:
                     {"period": "Mar 13", "description": "Project setup", "status": "done"},
                 ]
             }
-            phases = await generate_repo_timeline(group)
+            phases = await generate_group_timeline(group)
 
         assert len(phases) == 2
         assert phases[0].period == "Mar 15"
@@ -231,7 +231,7 @@ class TestGenerateRepoTimeline:
         mock_path = "agent_kitchen.timeline._call_timeline_llm"
         with patch(mock_path, new_callable=AsyncMock) as mock_llm:
             mock_llm.side_effect = RuntimeError("Connection failed")
-            phases = await generate_repo_timeline(group)
+            phases = await generate_group_timeline(group)
 
         assert len(phases) == 2  # fallback: one per day
 
@@ -239,7 +239,7 @@ class TestGenerateRepoTimeline:
     async def test_empty_group(self):
         group = _make_repo_group([])
         group.sessions = []
-        phases = await generate_repo_timeline(group)
+        phases = await generate_group_timeline(group)
         assert phases == []
 
     @pytest.mark.asyncio
@@ -262,7 +262,7 @@ class TestGenerateRepoTimeline:
                     for i in range(8)
                 ]
             }
-            phases = await generate_repo_timeline(group)
+            phases = await generate_group_timeline(group)
 
         assert len(phases) <= 5
 

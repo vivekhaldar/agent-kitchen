@@ -167,6 +167,7 @@ def _scan_and_group() -> tuple[list, dict]:
     # Apply cached timelines or generate fallbacks
     try:
         apply_cached_timelines(repo_groups, cache)
+        apply_cached_timelines(non_repo_groups, cache)
     except Exception:
         logger.exception("Timeline application failed")
 
@@ -207,9 +208,9 @@ async def _summarize_and_regroup(all_sessions: list) -> dict:
         logger.exception("Session grouping failed")
         repo_groups, non_repo_groups = [], []
 
-    # Generate LLM-powered timelines for repo groups
+    # Generate LLM-powered timelines for all groups
     try:
-        await batch_generate_timelines(repo_groups, cache)
+        await batch_generate_timelines(repo_groups + non_repo_groups, cache)
     except Exception:
         logger.exception("Timeline generation failed")
 

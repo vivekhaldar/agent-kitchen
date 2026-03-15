@@ -1,4 +1,4 @@
-# ABOUTME: Generates repo-level timelines showing how work evolved over time.
+# ABOUTME: Generates group-level timelines showing how work evolved over time.
 # ABOUTME: Buckets sessions by day, optionally merges phases via LLM.
 
 import asyncio
@@ -8,7 +8,10 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 from agent_kitchen.config import HAIKU_MODEL, SUMMARY_CONCURRENCY
-from agent_kitchen.models import RepoGroup, Session, TimelinePhase
+from agent_kitchen.models import NonRepoGroup, RepoGroup, Session, TimelinePhase
+
+# Union type for groups that have timelines
+TimelineGroup = RepoGroup | NonRepoGroup
 
 logger = logging.getLogger(__name__)
 
@@ -162,20 +165,34 @@ async def _call_timeline_llm(prompt: str) -> dict:
     return result
 
 
-async def generate_repo_timeline(group: RepoGroup) -> list[TimelinePhase]:
-    """Generate a timeline for a repo group using the LLM."""
+def _group_name(group: TimelineGroup) -> str:
+    """Get a display name for a group."""
+    if isinstance(group, RepoGroup):
+        return group.repo_name
+    return group.cwd.split("/")[-1] or group.cwd
+
+
+def _group_cache_key(group: TimelineGroup) -> str:
+    """Get a cache key for a group's timeline."""
+    if isinstance(group, RepoGroup):
+        return f"timeline:{group.repo_root}"
+    return f"timeline:{group.cwd}"
+
+
+async def generate_group_timeline(group: TimelineGroup) -> list[TimelinePhase]:
+    """Generate a timeline for a group using the LLM."""
     sessions = group.sessions
     if not sessions:
         return []
 
-    # Single-day repos don't need LLM
+    # Single-day groups don't need LLM
     days = _sessions_by_day(sessions)
     if len(days) <= 1:
         return fallback_timeline(sessions)
 
     formatted = _format_sessions_for_prompt(sessions)
     prompt = TIMELINE_PROMPT_TEMPLATE.format(
-        repo_name=group.repo_name,
+        repo_name=_group_name(group),
         formatted_sessions=formatted,
     )
 
@@ -221,21 +238,21 @@ async def generate_repo_timeline(group: RepoGroup) -> list[TimelinePhase]:
 
 
 async def batch_generate_timelines(
-    repo_groups: list[RepoGroup],
+    groups: list[TimelineGroup],
     cache,
     concurrency: int = SUMMARY_CONCURRENCY,
 ) -> None:
-    """Generate timelines for all repo groups, using cache where possible.
+    """Generate timelines for all groups, using cache where possible.
 
     Mutates each group's timeline field in place.
     """
-    if not repo_groups:
+    if not groups:
         return
 
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def _generate_one(group: RepoGroup) -> None:
-        cache_key = f"timeline:{group.repo_root}"
+    async def _generate_one(group: TimelineGroup) -> None:
+        cache_key = _group_cache_key(group)
         max_mtime = max(s.file_mtime for s in group.sessions) if group.sessions else 0.0
 
         if not cache.needs_refresh(cache_key, max_mtime):
@@ -249,7 +266,7 @@ async def batch_generate_timelines(
                     pass
 
         async with semaphore:
-            group.timeline = await generate_repo_timeline(group)
+            group.timeline = await generate_group_timeline(group)
 
         # Cache the result
         phases_json = json.dumps(
@@ -265,15 +282,15 @@ async def batch_generate_timelines(
         )
         cache.set(cache_key, phases_json, "timeline", max_mtime)
 
-    tasks = [_generate_one(group) for group in repo_groups]
+    tasks = [_generate_one(group) for group in groups]
     await asyncio.gather(*tasks)
     cache.save()
 
 
-def apply_cached_timelines(repo_groups: list[RepoGroup], cache) -> None:
-    """Apply cached timelines to repo groups, or generate fallbacks."""
-    for group in repo_groups:
-        cache_key = f"timeline:{group.repo_root}"
+def apply_cached_timelines(groups: list[TimelineGroup], cache) -> None:
+    """Apply cached timelines to groups, or generate fallbacks."""
+    for group in groups:
+        cache_key = _group_cache_key(group)
         max_mtime = max(s.file_mtime for s in group.sessions) if group.sessions else 0.0
 
         if not cache.needs_refresh(cache_key, max_mtime):

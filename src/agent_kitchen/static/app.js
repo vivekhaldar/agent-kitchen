@@ -290,10 +290,29 @@
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
+    // Render timeline if present
+    if (group.timeline && group.timeline.length > 0) {
+      var timelineEl = document.createElement("div");
+      timelineEl.className = "repo-timeline";
+      group.timeline.forEach(function (phase) {
+        var phaseEl = document.createElement("div");
+        phaseEl.className = "timeline-phase";
+        phaseEl.innerHTML =
+          '<span class="timeline-period">' + escapeHtml(phase.period) + '</span>' +
+          '<span class="timeline-desc">' + escapeHtml(phase.description) + '</span>';
+        timelineEl.appendChild(phaseEl);
+      });
+      sessionList.appendChild(timelineEl);
+    }
+
     var showingAll = filteredSessions.length <= INITIAL_VISIBLE;
 
     function renderVisibleSessions() {
+      // Preserve timeline element if present
+      var timeline = sessionList.querySelector(".repo-timeline");
       sessionList.innerHTML = "";
+      if (timeline) sessionList.appendChild(timeline);
+
       var toShow = showingAll ? filteredSessions : filteredSessions.slice(0, INITIAL_VISIBLE);
       toShow.forEach(function (session) {
         sessionList.appendChild(renderSessionRow(session));
