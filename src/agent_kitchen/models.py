@@ -26,6 +26,16 @@ class Session:
 
 
 @dataclass
+class TimelinePhase:
+    """A phase of work in a repo's history, spanning one or more days."""
+
+    period: str  # "Today", "Mar 13-14", "Mar 10-12"
+    description: str  # max 80 chars
+    session_count: int
+    status: str  # "done", "in progress", "mixed"
+
+
+@dataclass
 class RepoGroup:
     """Sessions grouped by git repository, with live git status."""
 
@@ -36,6 +46,7 @@ class RepoGroup:
     unpushed_commits: int
     sessions: list[Session] = field(default_factory=list)
     last_active: datetime = field(default_factory=lambda: datetime.min)
+    timeline: list[TimelinePhase] = field(default_factory=list)
 
 
 @dataclass

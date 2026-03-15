@@ -495,6 +495,34 @@ body {
   color: #fff;
 }
 
+/* ===== Repo Timeline ===== */
+
+.repo-timeline {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.timeline-phase {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.timeline-period {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 80px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.timeline-desc {
+  color: var(--text-secondary);
+}
+
 /* ===== Session List ===== */
 
 .session-list {

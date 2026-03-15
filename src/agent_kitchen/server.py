@@ -27,6 +27,7 @@ from agent_kitchen.git_status import get_repo_root
 from agent_kitchen.grouping import group_sessions
 from agent_kitchen.scanner import scan_claude_sessions, scan_codex_sessions
 from agent_kitchen.summarizer import _make_fallback, batch_summarize, extract_context_for_summary
+from agent_kitchen.timeline import apply_cached_timelines, batch_generate_timelines
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,12 @@ def _scan_and_group() -> tuple[list, dict]:
         logger.exception("Session grouping failed")
         repo_groups, non_repo_groups = [], []
 
+    # Apply cached timelines or generate fallbacks
+    try:
+        apply_cached_timelines(repo_groups, cache)
+    except Exception:
+        logger.exception("Timeline application failed")
+
     elapsed_ms = int((time.monotonic() - start) * 1000)
 
     data = {
@@ -199,6 +206,12 @@ async def _summarize_and_regroup(all_sessions: list) -> dict:
     except Exception:
         logger.exception("Session grouping failed")
         repo_groups, non_repo_groups = [], []
+
+    # Generate LLM-powered timelines for repo groups
+    try:
+        await batch_generate_timelines(repo_groups, cache)
+    except Exception:
+        logger.exception("Timeline generation failed")
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
     logger.info("Summarization complete in %dms", elapsed_ms)
