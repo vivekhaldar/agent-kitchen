@@ -257,7 +257,7 @@ async def batch_generate_timelines(
 
         if not cache.needs_refresh(cache_key, max_mtime):
             cached = cache.get(cache_key)
-            if cached and cached.get("status") == "timeline":
+            if cached and cached.get("type") == "timeline":
                 try:
                     phases_data = json.loads(cached["summary"])
                     group.timeline = [TimelinePhase(**p) for p in phases_data]
@@ -269,18 +269,16 @@ async def batch_generate_timelines(
             group.timeline = await generate_group_timeline(group)
 
         # Cache the result
-        phases_json = json.dumps(
-            [
-                {
-                    "period": p.period,
-                    "description": p.description,
-                    "session_count": p.session_count,
-                    "status": p.status,
-                }
-                for p in group.timeline
-            ]
-        )
-        cache.set(cache_key, phases_json, "timeline", max_mtime)
+        phases_dicts = [
+            {
+                "period": p.period,
+                "description": p.description,
+                "session_count": p.session_count,
+                "status": p.status,
+            }
+            for p in group.timeline
+        ]
+        cache.set_timeline(cache_key, phases_dicts, max_mtime)
 
     tasks = [_generate_one(group) for group in groups]
     await asyncio.gather(*tasks)
@@ -295,7 +293,7 @@ def apply_cached_timelines(groups: list[TimelineGroup], cache) -> None:
 
         if not cache.needs_refresh(cache_key, max_mtime):
             cached = cache.get(cache_key)
-            if cached and cached.get("status") == "timeline":
+            if cached and cached.get("type") == "timeline":
                 try:
                     phases_data = json.loads(cached["summary"])
                     group.timeline = [TimelinePhase(**p) for p in phases_data]

@@ -4,7 +4,33 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from agent_kitchen.git_status import GitStatus, get_git_status, get_repo_root
+
+
+@pytest.fixture(autouse=True)
+def _isolate_git_from_parent_repos(tmp_path, monkeypatch):
+    """Prevent git from discovering parent repos above tmp_path.
+
+    Without this, tests running inside a worktree (or any git repo) would find
+    the parent repo instead of the test's freshly-init'd repo.
+    """
+
+    ceiling = str(tmp_path.parent)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", ceiling)
+    # Remove GIT env vars that pre-commit hooks inject, which would
+    # override the test's freshly-init'd repos
+    for var in (
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+    ):
+        monkeypatch.delenv(var, raising=False)
 
 
 class TestGetRepoRoot:

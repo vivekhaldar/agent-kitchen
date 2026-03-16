@@ -279,7 +279,11 @@ class TestBatchGenerateTimelines:
         ]
         cache = MagicMock()
         cache.needs_refresh.return_value = False
-        cache.get.return_value = {"summary": json.dumps(phases_data), "status": "timeline"}
+        cache.get.return_value = {
+            "type": "timeline",
+            "summary": json.dumps(phases_data),
+            "status": "timeline",
+        }
 
         await batch_generate_timelines([group], cache)
 
@@ -316,7 +320,7 @@ class TestBatchGenerateTimelines:
             await batch_generate_timelines([group], cache)
 
         assert len(group.timeline) == 2
-        cache.set.assert_called_once()
+        cache.set_timeline.assert_called_once()
         cache.save.assert_called_once()
 
     @pytest.mark.asyncio
@@ -330,7 +334,11 @@ class TestBatchGenerateTimelines:
         phases_data = [
             {"period": "Today", "description": "Work", "session_count": 2, "status": "done"}
         ]
-        cache.get.return_value = {"summary": json.dumps(phases_data), "status": "timeline"}
+        cache.get.return_value = {
+            "type": "timeline",
+            "summary": json.dumps(phases_data),
+            "status": "timeline",
+        }
 
         await batch_generate_timelines([group], cache)
 
@@ -348,7 +356,11 @@ class TestApplyCachedTimelines:
         ]
         cache = MagicMock()
         cache.needs_refresh.return_value = False
-        cache.get.return_value = {"summary": json.dumps(phases_data), "status": "timeline"}
+        cache.get.return_value = {
+            "type": "timeline",
+            "summary": json.dumps(phases_data),
+            "status": "timeline",
+        }
 
         apply_cached_timelines([group], cache)
 

@@ -1,5 +1,5 @@
 # ABOUTME: Tests for the summary cache layer.
-# ABOUTME: Validates load, save, get, set, and invalidation logic.
+# ABOUTME: Validates load, save, get, set, invalidation, validation, and eviction.
 
 import json
 
@@ -121,10 +121,16 @@ def test_load_corrupted_file(tmp_path):
 
 def test_load_wrong_version(tmp_path):
     cache_path = tmp_path / "summaries.json"
-    cache_path.write_text(json.dumps({"version": 999, "entries": {"s1": {}}}))
+    valid_entry = {
+        "summary": "Test",
+        "status": "done",
+        "file_mtime": 100.0,
+        "generated_at": "2026-01-01T00:00:00+00:00",
+    }
+    cache_path.write_text(json.dumps({"version": 999, "entries": {"s1": valid_entry}}))
     cache = SummaryCache(cache_path)
     # Should still load — version is informational for now
-    assert cache.entries == {"s1": {}}
+    assert "s1" in cache.entries
 
 
 def test_multiple_sessions(tmp_path):
@@ -138,3 +144,134 @@ def test_multiple_sessions(tmp_path):
     assert cache2.get("s1")["summary"] == "First session"
     assert cache2.get("s2")["status"] == "in progress"
     assert cache2.get("s3")["status"] == "waiting for input"
+
+
+def test_set_includes_type_field(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json")
+    cache.set("s1", "Summary text", "done", 100.0)
+    entry = cache.get("s1")
+    assert entry["type"] == "summary"
+
+
+def test_set_timeline(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json")
+    phases = [
+        {
+            "period": "Today",
+            "description": "Work",
+            "session_count": 1,
+            "status": "done",
+        }
+    ]
+    cache.set_timeline("tl1", phases, 100.0)
+    entry = cache.get("tl1")
+    assert entry["type"] == "timeline"
+    assert entry["status"] == "timeline"
+    assert json.loads(entry["summary"]) == phases
+    assert entry["file_mtime"] == 100.0
+    assert "generated_at" in entry
+
+
+def test_set_timeline_roundtrip(tmp_path):
+    cache_path = tmp_path / "summaries.json"
+    cache = SummaryCache(cache_path)
+    phases = [
+        {
+            "period": "Today",
+            "description": "Fix bugs",
+            "session_count": 2,
+            "status": "done",
+        },
+        {
+            "period": "Yesterday",
+            "description": "Add feature",
+            "session_count": 1,
+            "status": "done",
+        },
+    ]
+    cache.set_timeline("tl1", phases, 200.0)
+    cache.save()
+
+    cache2 = SummaryCache(cache_path)
+    entry = cache2.get("tl1")
+    assert entry["type"] == "timeline"
+    assert json.loads(entry["summary"]) == phases
+
+
+def test_load_drops_malformed_entries(tmp_path):
+    cache_path = tmp_path / "summaries.json"
+    entries = {
+        "good": {
+            "summary": "Valid",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+        },
+        "bad_missing_summary": {
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+        },
+        "bad_empty": {},
+        "bad_not_dict": "string_value",
+    }
+    cache_path.write_text(json.dumps({"version": 1, "entries": entries}))
+    cache = SummaryCache(cache_path)
+    assert "good" in cache.entries
+    assert "bad_missing_summary" not in cache.entries
+    assert "bad_empty" not in cache.entries
+    assert "bad_not_dict" not in cache.entries
+
+
+def test_eviction_removes_oldest(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json", max_entries=3)
+    # Add 5 entries with different generated_at timestamps
+    cache.entries = {
+        "s1": {
+            "summary": "A",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+        },
+        "s2": {
+            "summary": "B",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-02T00:00:00+00:00",
+        },
+        "s3": {
+            "summary": "C",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-03T00:00:00+00:00",
+        },
+        "s4": {
+            "summary": "D",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-04T00:00:00+00:00",
+        },
+        "s5": {
+            "summary": "E",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-05T00:00:00+00:00",
+        },
+    }
+    cache.save()
+
+    # Should keep 3 newest: s3, s4, s5
+    assert len(cache.entries) == 3
+    assert "s1" not in cache.entries
+    assert "s2" not in cache.entries
+    assert "s3" in cache.entries
+    assert "s4" in cache.entries
+    assert "s5" in cache.entries
+
+
+def test_eviction_not_triggered_under_limit(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json", max_entries=100)
+    cache.set("s1", "Test", "done", 100.0)
+    cache.set("s2", "Test", "done", 200.0)
+    cache.save()
+    assert len(cache.entries) == 2
