@@ -24,7 +24,7 @@
         <input type="number" id="scan-days" class="scan-days-input" value="7" min="1" max="365">
         <span class="scan-days-suffix">days</span>
       </label>
-      <button class="btn-refresh" id="btn-refresh" title="Refresh">Refresh</button>
+      <button class="btn-refresh" id="btn-refresh" title="Refresh" aria-label="Refresh sessions">Refresh</button>
     </div>
   </header>
 
@@ -36,6 +36,9 @@
   </div>
 
   <main class="content" id="content">
+    <div class="search-hint-bar" id="search-hint-bar">
+      <kbd>/</kbd> to search
+    </div>
     <div class="loading" id="loading">Loading sessions...</div>
 
     <!-- Repo groups rendered here by app.js -->
@@ -49,26 +52,32 @@
 
     <!-- Empty state -->
     <div id="empty-state" class="empty-state hidden">
-      No sessions found. Make sure <code>~/.claude</code> or <code>~/.codex</code> directories exist.
+      <div class="empty-state-title">No sessions found</div>
+      <div class="empty-state-body">
+        <p>Agent Kitchen looks for sessions in <code>~/.claude</code> and <code>~/.codex</code> directories.</p>
+        <p>Start a Claude Code or Codex CLI session in any git repo, then refresh this page.</p>
+        <p>You can also try increasing the scan range using the <strong>days</strong> input above.</p>
+      </div>
     </div>
   </main>
 
-  <div id="search-overlay" class="search-overlay hidden">
-    <div class="search-box">
+  <div id="search-overlay" class="search-overlay hidden" role="search" aria-label="Search sessions">
+    <div class="search-box" role="dialog" aria-label="Search">
       <div class="search-input-row">
-        <span class="search-icon">/</span>
+        <span class="search-icon" aria-hidden="true">/</span>
         <input type="text" id="search-input" class="search-input"
-               placeholder="Search sessions..." autocomplete="off" spellcheck="false">
+               placeholder="Search sessions..." autocomplete="off" spellcheck="false"
+               aria-label="Search sessions">
         <kbd class="search-hint">esc</kbd>
       </div>
-      <div class="search-results" id="search-results"></div>
+      <div class="search-results" id="search-results" role="listbox" aria-label="Search results"></div>
     </div>
   </div>
 
   <div id="terminal-panel" class="terminal-panel hidden">
     <div class="terminal-panel-header">
       <div class="terminal-tabs" id="terminal-tabs"></div>
-      <button class="terminal-panel-close" id="terminal-close">&times;</button>
+      <button class="terminal-panel-close" id="terminal-close" aria-label="Close terminal panel">&times;</button>
     </div>
     <div id="terminal-container"></div>
   </div>

@@ -176,15 +176,18 @@
 
     var header = document.createElement("div");
     header.className = "repo-header";
+    header.setAttribute("role", "button");
+    header.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+    header.setAttribute("tabindex", "0");
     header.innerHTML =
       '<div class="repo-header-left">' +
-      '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
+      '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '" aria-hidden="true">\u25B6</span>' +
       OCTOCAT_SVG +
       '<span class="repo-name">' + escapeHtml(group.repo_name) + "</span>" +
       '<span class="repo-meta">(' + metaParts.join(", ") + ")</span>" +
       "</div>" +
       '<div class="repo-header-right">' +
-      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.repo_root) + '">+</button>' +
+      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.repo_root) + '" aria-label="New session in ' + escapeHtml(group.repo_name) + '">+</button>' +
       timeAgo(group.last_active) +
       "</div>";
 
@@ -239,16 +242,26 @@
       openNewSession(group.repo_root);
     });
 
-    header.addEventListener("click", function () {
+    function toggleGroup() {
       if (expandedRepos.has(group.repo_root)) {
         expandedRepos.delete(group.repo_root);
         sessionList.classList.add("collapsed");
         header.querySelector(".repo-chevron").classList.remove("expanded");
+        header.setAttribute("aria-expanded", "false");
       } else {
         expandedRepos.add(group.repo_root);
         sessionList.classList.remove("collapsed");
         sessionList.style.maxHeight = sessionList.scrollHeight + "px";
         header.querySelector(".repo-chevron").classList.add("expanded");
+        header.setAttribute("aria-expanded", "true");
+      }
+    }
+
+    header.addEventListener("click", toggleGroup);
+    header.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleGroup();
       }
     });
 
@@ -276,14 +289,17 @@
 
     var header = document.createElement("div");
     header.className = "repo-header";
+    header.setAttribute("role", "button");
+    header.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+    header.setAttribute("tabindex", "0");
     header.innerHTML =
       '<div class="repo-header-left">' +
-      '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
+      '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '" aria-hidden="true">\u25B6</span>' +
       '<span class="repo-name">' + escapeHtml(displayName) + "</span>" +
       '<span class="repo-meta">(' + filteredSessions.length + " sessions)</span>" +
       "</div>" +
       '<div class="repo-header-right">' +
-      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.cwd) + '">+</button>' +
+      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.cwd) + '" aria-label="New session in ' + escapeHtml(displayName) + '">+</button>' +
       timeAgo(group.last_active) +
       "</div>";
 
@@ -337,16 +353,26 @@
       openNewSession(group.cwd);
     });
 
-    header.addEventListener("click", function () {
+    function toggleGroup() {
       if (expandedRepos.has(group.cwd)) {
         expandedRepos.delete(group.cwd);
         sessionList.classList.add("collapsed");
         header.querySelector(".repo-chevron").classList.remove("expanded");
+        header.setAttribute("aria-expanded", "false");
       } else {
         expandedRepos.add(group.cwd);
         sessionList.classList.remove("collapsed");
         sessionList.style.maxHeight = sessionList.scrollHeight + "px";
         header.querySelector(".repo-chevron").classList.add("expanded");
+        header.setAttribute("aria-expanded", "true");
+      }
+    }
+
+    header.addEventListener("click", toggleGroup);
+    header.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleGroup();
       }
     });
 
@@ -706,8 +732,10 @@
 
   var searchSelectedIdx = 0;
   var searchMatches = [];
+  var previouslyFocusedElement = null;
 
   function openSearch() {
+    previouslyFocusedElement = document.activeElement;
     $searchOverlay.classList.remove("hidden");
     $searchInput.value = "";
     $searchResults.innerHTML = "";
@@ -720,6 +748,10 @@
     $searchOverlay.classList.add("hidden");
     $searchInput.value = "";
     $searchResults.innerHTML = "";
+    if (previouslyFocusedElement && previouslyFocusedElement.focus) {
+      previouslyFocusedElement.focus();
+    }
+    previouslyFocusedElement = null;
   }
 
   function performSearch(query) {
@@ -821,6 +853,15 @@
         closeSearch();
         launchFromSearch(searchMatches[searchSelectedIdx].session);
       }
+    }
+  });
+
+  // Trap focus within search overlay when open
+  $searchOverlay.addEventListener("keydown", function (e) {
+    if (e.key === "Tab") {
+      // Keep focus on the search input (only focusable element in overlay)
+      e.preventDefault();
+      $searchInput.focus();
     }
   });
 
