@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def _format_period(d: date) -> str:
     """Format a single date as a human-readable period string."""
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now().astimezone().date()
     if d == today:
         return "Today"
     if d == today - timedelta(days=1):
@@ -30,7 +30,7 @@ def _format_date_range(start: date, end: date) -> str:
     """Format a date range as a human-readable period string."""
     if start == end:
         return _format_period(start)
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now().astimezone().date()
     yesterday = today - timedelta(days=1)
     # Handle "Today" and "Yesterday" for single-day ranges
     if end == today and start == yesterday:
@@ -58,7 +58,7 @@ def _sessions_by_day(sessions: list[Session]) -> list[tuple[date, list[Session]]
     by_day: dict[date, list[Session]] = defaultdict(list)
     for s in sessions:
         ts = s.started_at if s.started_at.tzinfo else s.started_at.replace(tzinfo=timezone.utc)
-        day = ts.date()
+        day = ts.astimezone().date()
         by_day[day].append(s)
     # Sort days newest first
     sorted_days = sorted(by_day.keys(), reverse=True)
