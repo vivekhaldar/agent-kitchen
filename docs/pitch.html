@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Kitchen — Your Agent Activity Feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: oklch(0.18 0.01 250);
+    --paper: oklch(0.97 0.005 80);
+    --warm: oklch(0.95 0.01 80);
+    --accent: oklch(0.62 0.18 38);
+    --accent-light: oklch(0.88 0.08 55);
+    --muted: oklch(0.55 0.01 250);
+    --faint: oklch(0.82 0.01 250);
+    --competitor: oklch(0.45 0.01 250);
+    --slide-max: 1100px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+    scroll-snap-type: y mandatory;
+    overflow-y: scroll;
+  }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- Slide structure --- */
+  .slide {
+    min-height: 100vh;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem 4rem;
+    position: relative;
+  }
+
+  .slide-inner {
+    max-width: var(--slide-max);
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* --- Slide counter --- */
+  .slide::before {
+    position: absolute;
+    top: 2.4rem;
+    right: 4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .slide:nth-child(1)::before { content: "01 / 05"; }
+  .slide:nth-child(2)::before { content: "02 / 05"; }
+  .slide:nth-child(3)::before { content: "03 / 05"; }
+  .slide:nth-child(4)::before { content: "04 / 05"; }
+  .slide:nth-child(5)::before { content: "05 / 05"; }
+
+  /* --- Nav dots --- */
+  .nav-dots {
+    position: fixed;
+    right: 1.8rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    z-index: 100;
+  }
+  .nav-dots a {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--faint);
+    transition: background 0.3s, transform 0.3s;
+  }
+  .nav-dots a.active {
+    background: var(--accent);
+    transform: scale(1.4);
+  }
+
+  /* --- Typography --- */
+  .kicker {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+
+  h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(2.2rem, 4.5vw, 3.2rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    max-width: 20ch;
+  }
+
+  h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    max-width: 26ch;
+  }
+
+  .subtitle {
+    font-size: 1.15rem;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 38ch;
+    margin-top: 1.4rem;
+  }
+
+  /* --- Slide 1: Title --- */
+  .slide-title {
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .slide-title .kicker { color: var(--accent); }
+  .slide-title .subtitle { color: var(--muted); }
+  .slide-title h1 { color: var(--ink); }
+
+  .title-meta {
+    margin-top: 3rem;
+    display: flex;
+    gap: 2.5rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .title-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .title-meta .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  /* --- Slide 2: Problem split --- */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    margin-top: 2.5rem;
+  }
+
+  .problem-col h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1.5px solid var(--faint);
+  }
+
+  .problem-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--ink);
+  }
+  .problem-item .icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 3px;
+  }
+  .them .icon {
+    background: oklch(0.92 0.01 250);
+    color: var(--muted);
+  }
+  .us .icon {
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+
+  /* --- Slide 3: Screenshots --- */
+  .screenshots-duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+  .screenshot-panel {}
+  .screenshot-panel .label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+  .screenshot-wrap {
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid oklch(0.88 0.01 250);
+    box-shadow: 0 8px 40px oklch(0 0 0 / 0.08);
+  }
+  .screenshot-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .screenshot-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.8rem;
+    letter-spacing: 0.02em;
+  }
+
+  /* --- Slide 4: Comparison table --- */
+  .comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2rem;
+    font-size: 0.88rem;
+  }
+  .comp-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 1rem 0.8rem 0;
+    border-bottom: 1.5px solid var(--ink);
+  }
+  .comp-table th:first-child { padding-left: 0; }
+  .comp-table th.highlight {
+    color: var(--accent);
+  }
+  .comp-table td {
+    padding: 0.75rem 1rem 0.75rem 0;
+    border-bottom: 1px solid oklch(0.9 0.005 250);
+    vertical-align: top;
+    line-height: 1.4;
+  }
+  .comp-table td:first-child {
+    font-weight: 500;
+    padding-left: 0;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .comp-table td.ours {
+    font-weight: 500;
+  }
+  .comp-table .yes { color: var(--accent); font-weight: 600; }
+  .comp-table .no { color: var(--faint); }
+
+  /* --- Slide 5: CTA --- */
+  .slide-cta {
+    background: var(--warm);
+  }
+  .cta-install {
+    margin-top: 2.2rem;
+    background: var(--ink);
+    color: var(--paper);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.9rem 1.6rem;
+    border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.05rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    cursor: default;
+    user-select: all;
+  }
+  .cta-install .prompt {
+    color: var(--accent);
+    user-select: none;
+  }
+
+  .cta-links {
+    margin-top: 2rem;
+    display: flex;
+    gap: 2rem;
+    font-size: 0.85rem;
+  }
+  .cta-links a {
+    color: var(--muted);
+    text-decoration: none;
+    border-bottom: 1px solid var(--faint);
+    padding-bottom: 2px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .cta-links a:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .landscape-note {
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid oklch(0.85 0.01 80);
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.6;
+    max-width: 50ch;
+  }
+  .landscape-note strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* --- Animations --- */
+  .slide-inner > * {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  }
+  .slide-inner.visible > * {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .slide-inner > *:nth-child(2) { transition-delay: 0.08s; }
+  .slide-inner > *:nth-child(3) { transition-delay: 0.16s; }
+  .slide-inner > *:nth-child(4) { transition-delay: 0.24s; }
+  .slide-inner > *:nth-child(5) { transition-delay: 0.32s; }
+
+  /* --- Responsive --- */
+  @media (max-width: 768px) {
+    .slide { padding: 2rem 1.5rem; }
+    .problem-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .nav-dots { display: none; }
+    .slide::before { right: 1.5rem; top: 1.5rem; }
+    .title-meta { flex-direction: column; gap: 0.6rem; }
+    .screenshots-duo { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav-dots" aria-label="Slide navigation">
+  <a href="#slide-1" class="active" aria-label="Slide 1"></a>
+  <a href="#slide-2" aria-label="Slide 2"></a>
+  <a href="#slide-3" aria-label="Slide 3"></a>
+  <a href="#slide-4" aria-label="Slide 4"></a>
+  <a href="#slide-5" aria-label="Slide 5"></a>
+</nav>
+
+<!-- Slide 1: Title -->
+<section class="slide slide-title" id="slide-1">
+  <div class="slide-inner">
+    <p class="kicker">Agent Kitchen</p>
+    <h1>Your personal agent activity&nbsp;feed</h1>
+    <p class="subtitle">
+      Not another orchestrator. A&nbsp;dashboard that makes sense of every session your AI agents have run — across repos, your home directory, notes, configs, everywhere.
+    </p>
+    <div class="title-meta">
+      <span><span class="dot"></span> Open source &middot; Apache 2.0</span>
+      <span><span class="dot"></span> pip install agent-kitchen</span>
+      <span><span class="dot"></span> Zero config, zero workflow change</span>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 2: The problem -->
+<section class="slide" id="slide-2">
+  <div class="slide-inner">
+    <p class="kicker">The gap</p>
+    <h2>Orchestrators assume your agent lives in a&nbsp;repo. Yours&nbsp;doesn't.</h2>
+
+    <div class="problem-grid">
+      <div class="problem-col">
+        <h3>Conductor &amp; Sculptor</h3>
+        <div class="problem-item them">
+          <span class="icon">C</span>
+          <span>Every session scoped to a single git repository</span>
+        </div>
+        <div class="problem-item them">
+          <span class="icon">C</span>
+          <span>Agents run in containers or worktrees — isolated from your machine context</span>
+        </div>
+        <div class="problem-item them">
+          <span class="icon">C</span>
+          <span>Must launch agents through their UI to get any visibility</span>
+        </div>
+        <div class="problem-item them">
+          <span class="icon">C</span>
+          <span>No view of non-repo work: dotfiles, notes, home&nbsp;directory&nbsp;tasks</span>
+        </div>
+      </div>
+      <div class="problem-col">
+        <h3>Agent Kitchen</h3>
+        <div class="problem-item us">
+          <span class="icon">AK</span>
+          <span>Sessions grouped by repo <em>and</em> non-repo locations like ~/dotfiles, ~/notes</span>
+        </div>
+        <div class="problem-item us">
+          <span class="icon">AK</span>
+          <span>Agents run natively with full access to your memories, skills, configs</span>
+        </div>
+        <div class="problem-item us">
+          <span class="icon">AK</span>
+          <span>Works retroactively — scans sessions you already ran, however you ran them</span>
+        </div>
+        <div class="problem-item us">
+          <span class="icon">AK</span>
+          <span>AI-generated summaries tell you what happened, not just which file changed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 3: Screenshots -->
+<section class="slide" id="slide-3">
+  <div class="slide-inner">
+    <p class="kicker">In action</p>
+    <h2>See everything. Resume&nbsp;anything.</h2>
+    <p class="subtitle" style="max-width: 55ch;">
+      Browse sessions across repos and non-repo directories with AI summaries and git status — then resume any session right in the browser.
+    </p>
+    <div class="screenshots-duo">
+      <div class="screenshot-panel">
+        <p class="label">Dashboard</p>
+        <div class="screenshot-wrap">
+          <img src="screenshot.jpg" alt="Agent Kitchen dashboard showing repo groups, session summaries, git status, and timeline" loading="lazy">
+        </div>
+      </div>
+      <div class="screenshot-panel">
+        <p class="label">Resume in browser</p>
+        <div class="screenshot-wrap">
+          <img src="ak-shell.jpg" alt="Agent Kitchen in-browser terminal resuming a Claude Code session with live code edits and test output" loading="lazy">
+        </div>
+      </div>
+    </div>
+    <p class="screenshot-caption">Click any session to resume it in a full browser terminal — no context switching, no copy-pasting session IDs</p>
+  </div>
+</section>
+
+<!-- Slide 4: Comparison -->
+<section class="slide" id="slide-4">
+  <div class="slide-inner">
+    <p class="kicker">Landscape</p>
+    <h2>Different tool, different&nbsp;job</h2>
+
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="highlight">Agent Kitchen</th>
+          <th>Conductor</th>
+          <th>Sculptor</th>
+          <th>Claude Squad</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Non-repo sessions</td>
+          <td class="ours"><span class="yes">First-class</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+        </tr>
+        <tr>
+          <td>Access to ~/memories, skills, configs</td>
+          <td class="ours"><span class="yes">Full</span></td>
+          <td>Worktree only</td>
+          <td><span class="no">Container</span></td>
+          <td>Worktree only</td>
+        </tr>
+        <tr>
+          <td>LLM session summaries</td>
+          <td class="ours"><span class="yes">Yes</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+        </tr>
+        <tr>
+          <td>Works without workflow change</td>
+          <td class="ours"><span class="yes">Yes</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+        </tr>
+        <tr>
+          <td>Resume sessions in browser</td>
+          <td class="ours"><span class="yes">Yes</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="no">No</span></td>
+        </tr>
+        <tr>
+          <td>Repo timeline / history</td>
+          <td class="ours"><span class="yes">Yes</span></td>
+          <td><span class="no">No</span></td>
+          <td>Session replay</td>
+          <td><span class="no">No</span></td>
+        </tr>
+        <tr>
+          <td>Parallel agent orchestration</td>
+          <td><span class="no">View only</span></td>
+          <td><span class="yes">Yes</span></td>
+          <td><span class="yes">Yes</span></td>
+          <td><span class="yes">Yes</span></td>
+        </tr>
+        <tr>
+          <td>Open source</td>
+          <td class="ours"><span class="yes">Apache 2.0</span></td>
+          <td><span class="no">No</span></td>
+          <td><span class="yes">Yes</span></td>
+          <td><span class="yes">Yes</span></td>
+        </tr>
+        <tr>
+          <td>Setup</td>
+          <td class="ours">One command</td>
+          <td>App download</td>
+          <td>App download</td>
+          <td>Homebrew + tmux</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Slide 5: CTA -->
+<section class="slide slide-cta" id="slide-5">
+  <div class="slide-inner">
+    <p class="kicker">Get started</p>
+    <h2>One command. Zero&nbsp;config. See&nbsp;everything.</h2>
+    <p class="subtitle">
+      Works with Claude Code and Codex CLI sessions you've already&nbsp;run. No signup, no containers, no workflow&nbsp;changes.
+    </p>
+
+    <div class="cta-install">
+      <span class="prompt">$</span> uvx agent-kitchen web
+    </div>
+
+    <div class="cta-links">
+      <a href="https://pypi.org/project/agent-kitchen/">PyPI</a>
+      <a href="https://github.com/haldar/agent-kitchen">GitHub</a>
+    </div>
+
+    <div class="landscape-note">
+      <strong>17+ tools</strong> now compete in the AI agent management space — from Claude Squad (6.3k stars) to ccusage (11.5k stars) to Conductor and Sculptor. Most are orchestrators fighting over the same "run parallel agents in repos" use case. Agent Kitchen is the only one built for developers who use Claude as an everything&nbsp;agent.
+    </div>
+  </div>
+</section>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const dots = document.querySelectorAll('.nav-dots a');
+  const inners = document.querySelectorAll('.slide-inner');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.querySelector('.slide-inner').classList.add('visible');
+        const idx = Array.from(slides).indexOf(entry.target);
+        dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+      }
+    });
+  }, { threshold: 0.35 });
+
+  slides.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
