@@ -1,0 +1,31 @@
+in the competitive analysis above also include https://imbue.com/sculptor/
+
+---
+
+but there is a problem -- agent-kitchen is very much for my workflow that moves between non-git places like my homedir and git repos. both conductor and sculptor are very git-repo-centered. and then they run in containers. i have a giant ~/AGENT folder that contains tons of context that i want applied everywhere
+
+---
+
+there doesn't seem to be that much differentiation between conductor and sculptor. what am i missing?
+
+---
+
+do they have youtube channels? or twitter/x accounts
+
+---
+
+take the above competitive analysis and turn it into a short (3-5 slides) presentation in html. use your frontend skill. i really want to sell agent-kitchen. include a screenshot. i want to position motivation in contrast to conductor + sculptor -- not an orchestrator (though it can do that), but something to make sense of what i got done in all those sessions. and also the big workflow difference -- i'm using claude code as an everything agent, not just in specific git repos.
+
+---
+
+i also want to mention that you can resume those sessions right in the web ui -- see ~/Downloads/ak-shell.jpg
+
+include that image in the slide
+
+---
+
+ok looks good but the first slide is dark mode while the rest is not
+
+---
+
+can you make the whole deck use more "code" like fonts? i want it to look nerdy....
