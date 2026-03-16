@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,22 +40,6 @@ def decode_claude_project_path(dirname: str) -> str:
     return dirname.replace("-", "/")
 
 
-def _read_last_line(file_path: str) -> str | None:
-    """Read the last non-empty line of a file efficiently using tail."""
-    try:
-        result = subprocess.run(
-            ["tail", "-1", file_path],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, OSError):
-        pass
-    return None
-
-
 def _parse_jsonl_line(line: str) -> dict | None:
     """Parse a single JSONL line, returning None on failure."""
     try:
@@ -80,22 +63,6 @@ def _parse_timestamp(ts: str | None) -> datetime | None:
 
 def _scan_single_claude_file(file_path: Path) -> Session | None:
     """Parse a single Claude Code JSONL session file into a Session object."""
-    try:
-        with open(file_path) as f:
-            lines = f.readlines()
-    except OSError as e:
-        logger.warning("Failed to read %s: %s", file_path, e)
-        return None
-
-    if not lines:
-        return None
-
-    # Parse first line for initial metadata
-    first_record = _parse_jsonl_line(lines[0])
-    if not first_record:
-        logger.warning("Failed to parse first line of %s", file_path)
-        return None
-
     session_id = file_path.stem  # UUID from filename
     cwd = None
     git_branch = None
@@ -105,37 +72,51 @@ def _scan_single_claude_file(file_path: Path) -> Session | None:
     turn_count = 0
     user_turn_count = 0
     first_user_text = None
+    has_records = False
 
-    # Scan all records for metadata and turn count
-    for line in lines:
-        record = _parse_jsonl_line(line)
-        if not record:
-            continue
+    # Stream-parse line by line to avoid loading entire file into memory
+    try:
+        with open(file_path) as f:
+            for line in f:
+                record = _parse_jsonl_line(line)
+                if not record:
+                    if not has_records:
+                        # First line must parse successfully
+                        logger.warning("Failed to parse first line of %s", file_path)
+                        return None
+                    continue
 
-        record_type = record.get("type")
-        timestamp = _parse_timestamp(record.get("timestamp"))
+                has_records = True
+                record_type = record.get("type")
+                timestamp = _parse_timestamp(record.get("timestamp"))
 
-        if record_type in ("user", "assistant"):
-            turn_count += 1
+                if record_type in ("user", "assistant"):
+                    turn_count += 1
 
-            # Track timestamps
-            if timestamp:
-                if started_at is None or timestamp < started_at:
-                    started_at = timestamp
-                if last_active is None or timestamp > last_active:
-                    last_active = timestamp
+                    # Track timestamps
+                    if timestamp:
+                        if started_at is None or timestamp < started_at:
+                            started_at = timestamp
+                        if last_active is None or timestamp > last_active:
+                            last_active = timestamp
 
-        if record_type == "user":
-            user_turn_count += 1
-            if first_user_text is None:
-                first_user_text = _extract_message_text(record)
-            # Extract metadata from user records
-            if cwd is None:
-                cwd = record.get("cwd")
-            if git_branch is None:
-                git_branch = record.get("gitBranch")
-            if slug is None:
-                slug = record.get("slug")
+                if record_type == "user":
+                    user_turn_count += 1
+                    if first_user_text is None:
+                        first_user_text = _extract_message_text(record)
+                    # Extract metadata from user records
+                    if cwd is None:
+                        cwd = record.get("cwd")
+                    if git_branch is None:
+                        git_branch = record.get("gitBranch")
+                    if slug is None:
+                        slug = record.get("slug")
+    except OSError as e:
+        logger.warning("Failed to read %s: %s", file_path, e)
+        return None
+
+    if not has_records:
+        return None
 
     if started_at is None or last_active is None:
         # No valid timestamped user/assistant records found
@@ -292,50 +273,51 @@ def _scan_single_codex_file(file_path: Path, session_index: dict[str, str]) -> S
 
     session_id, filename_started_at = parsed
 
-    try:
-        with open(file_path) as f:
-            lines = f.readlines()
-    except OSError as e:
-        logger.warning("Failed to read %s: %s", file_path, e)
-        return None
-
-    if not lines:
-        return None
-
     cwd = None
     git_branch = None
     started_at = filename_started_at
     last_active = filename_started_at
     turn_count = 0
+    has_records = False
 
-    for line in lines:
-        record = _parse_jsonl_line(line.strip())
-        if not record:
-            continue
+    # Stream-parse line by line to avoid loading entire file into memory
+    try:
+        with open(file_path) as f:
+            for line in f:
+                record = _parse_jsonl_line(line.strip())
+                if not record:
+                    continue
 
-        record_type = record.get("type")
-        timestamp = _parse_timestamp(record.get("timestamp"))
+                has_records = True
+                record_type = record.get("type")
+                timestamp = _parse_timestamp(record.get("timestamp"))
 
-        # Track last_active from any record with a timestamp
-        if timestamp and timestamp > last_active:
-            last_active = timestamp
+                # Track last_active from any record with a timestamp
+                if timestamp and timestamp > last_active:
+                    last_active = timestamp
 
-        payload = record.get("payload", {})
+                payload = record.get("payload", {})
 
-        if record_type == "session_meta":
-            cwd = payload.get("cwd")
-            git_info = payload.get("git")
-            if git_info:
-                git_branch = git_info.get("branch")
-            # Use payload timestamp if available (more precise than filename)
-            meta_ts = _parse_timestamp(payload.get("timestamp"))
-            if meta_ts:
-                started_at = meta_ts
+                if record_type == "session_meta":
+                    cwd = payload.get("cwd")
+                    git_info = payload.get("git")
+                    if git_info:
+                        git_branch = git_info.get("branch")
+                    # Use payload timestamp if available (more precise than filename)
+                    meta_ts = _parse_timestamp(payload.get("timestamp"))
+                    if meta_ts:
+                        started_at = meta_ts
 
-        elif record_type == "event_msg":
-            payload_type = payload.get("type")
-            if payload_type in ("user_message", "agent_message"):
-                turn_count += 1
+                elif record_type == "event_msg":
+                    payload_type = payload.get("type")
+                    if payload_type in ("user_message", "agent_message"):
+                        turn_count += 1
+    except OSError as e:
+        logger.warning("Failed to read %s: %s", file_path, e)
+        return None
+
+    if not has_records:
+        return None
 
     if cwd is None:
         # No session_meta found; skip this file

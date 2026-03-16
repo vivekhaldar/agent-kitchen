@@ -4,7 +4,21 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from agent_kitchen.git_status import GitStatus, get_git_status, get_repo_root
+
+
+@pytest.fixture(autouse=True)
+def _clean_git_env(monkeypatch):
+    """Strip GIT_DIR and GIT_WORK_TREE so test git commands operate on temp repos.
+
+    Pre-commit and git worktrees set these env vars, which cause git init/status
+    in temp directories to operate on the parent worktree instead.
+    """
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+    monkeypatch.delenv("GIT_INDEX_FILE", raising=False)
 
 
 class TestGetRepoRoot:
