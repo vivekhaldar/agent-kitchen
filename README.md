@@ -1,21 +1,42 @@
 # Agent Kitchen
 
-**A unified dashboard for all your AI coding agent sessions.**
+**Like browser history for your Claude Code sessions.**
 
-If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex), you've probably lost track of what's happening across your sessions. Which repos have active work? What was that session doing? Where did you leave off?
+<p align="center">
+  <img src="docs/screenshot.jpg" alt="Agent Kitchen dashboard" width="900">
+</p>
 
-Agent Kitchen scans your local session files, groups them by git repo, and gives you a single view of everything — with LLM-generated summaries, live git status, and one-click resume.
+You run dozens of Claude Code and Codex sessions a day. Which repos have active work? What was that session doing? Where did you leave off yesterday?
+
+Agent Kitchen gives you a single dashboard for all of it — sessions grouped by repo, LLM-generated summaries, live git status, and one-click resume.
+
+```bash
+# One command. No install needed.
+uvx agent-kitchen web
+```
+
+## Why
+
+AI coding agents don't have a "recent projects" view. Your session history is scattered across hidden JSONL files. Switching between repos means losing context on what you were doing elsewhere.
+
+Agent Kitchen fixes this by scanning your local session data, grouping everything by git repo, and surfacing what matters:
+
+- **What's active** — sessions sorted by recency, status badges (done, in progress, waiting)
+- **What changed** — per-repo timeline showing work evolution over days
+- **What's dirty** — live git status (branch, uncommitted changes, unpushed commits)
+- **What it was about** — LLM-generated one-line summaries via Claude Haiku
 
 ## Features
 
-- **Unified view** — Claude Code and Codex CLI sessions in one dashboard, grouped by git repo
-- **LLM summaries** — Claude Haiku generates one-line summaries and classifies each session's status (done, in progress, waiting for input)
-- **Live git status** — see the current branch, dirty files, and unpushed commits per repo
-- **One-click resume** — click any session to resume it in a terminal window
-- **Fuzzy search** — press `/` to search across all sessions
-- **Browser terminal** — resume sessions directly in a browser-based terminal (xterm.js)
-- **Fast startup** — shows cached/fallback summaries instantly, upgrades to LLM summaries in the background
-- **No build step** — vanilla HTML/JS/CSS frontend, zero npm dependencies
+- **Unified view** — Claude Code and Codex CLI sessions in one place, grouped by repo
+- **LLM summaries** — one-line descriptions and status classification (done / in progress / waiting)
+- **Live git status** — current branch, dirty files, unpushed commits per repo
+- **Repo timelines** — see how work evolved across sessions over days
+- **One-click resume** — click any session to resume it in a terminal
+- **Browser terminal** — resume sessions in-browser via xterm.js
+- **Fuzzy search** — press `/` to filter across all sessions
+- **Fast startup** — cached summaries load instantly, LLM upgrades happen in the background
+- **No build step** — vanilla HTML/JS/CSS, zero npm dependencies
 
 ## Quick Start
 
@@ -28,14 +49,11 @@ uv pip install agent-kitchen
 agent-kitchen web
 ```
 
-The dashboard opens at `http://localhost:8099`.
+Opens at `http://localhost:8099`.
 
 ## Usage
 
 ```bash
-# Start the dashboard (opens browser automatically)
-agent-kitchen web
-
 # Custom port
 agent-kitchen web --port 9000
 
@@ -51,61 +69,54 @@ agent-kitchen web --summarize
 
 ### Pre-indexing summaries
 
-By default, the dashboard shows fallback summaries (the first user message). To get LLM-generated summaries, either pass `--summarize` to the web command, or pre-index with:
+By default, the dashboard shows fallback summaries (the first user message). For LLM-generated summaries, either pass `--summarize` to the web command, or pre-index:
 
 ```bash
-# Index all sessions from the last 60 days
-agent-kitchen index
-
-# See what would be indexed without making LLM calls
-agent-kitchen index --dry-run
-
-# Re-index everything, ignoring cache
-agent-kitchen index --force
-
-# Control LLM concurrency (default: 3)
-agent-kitchen index --concurrency 5
+agent-kitchen index              # Index all sessions from the last 60 days
+agent-kitchen index --dry-run    # Preview without LLM calls
+agent-kitchen index --force      # Re-index everything, ignoring cache
+agent-kitchen index --concurrency 5  # Control LLM concurrency (default: 3)
 ```
 
-Summaries are cached at `~/.cache/agent-kitchen/summaries.json` and shared between the indexer and the dashboard.
+Summaries are cached at `~/.cache/agent-kitchen/summaries.json`.
 
 ## Authentication (for LLM summaries)
 
-LLM-powered summaries require a Claude API credential. Agent Kitchen checks for credentials in this order:
+LLM summaries require a Claude API credential, checked in order:
 
-1. `ANTHROPIC_API_KEY` environment variable — standard Anthropic API key
-2. `CLAUDE_CODE_OAUTH_TOKEN` environment variable — Claude Max subscription token
-3. `pass` password manager at `dev/CLAUDE_SUBSCRIPTION_TOKEN` — fallback for `pass` users
+1. `ANTHROPIC_API_KEY` — standard Anthropic API key
+2. `CLAUDE_CODE_OAUTH_TOKEN` — Claude Max subscription token
+3. `pass` password manager at `dev/CLAUDE_SUBSCRIPTION_TOKEN`
 
 ```bash
-# Option 1: API key
 export ANTHROPIC_API_KEY=sk-ant-...
-agent-kitchen web --summarize
-
-# Option 2: Max subscription token
-export CLAUDE_CODE_OAUTH_TOKEN=...
 agent-kitchen web --summarize
 ```
 
-If no credentials are found, the dashboard still works — you just won't get LLM-generated summaries.
+Without credentials, the dashboard still works — you just get fallback summaries instead.
 
 ## Configuration
 
-| Environment Variable | Default | Description |
+| Variable | Default | Description |
 |---|---|---|
 | `AGENT_KITCHEN_PORT` | `8099` | Server port |
 | `AGENT_KITCHEN_SCAN_DAYS` | `60` | Days of history to scan |
 | `AGENT_KITCHEN_REFRESH_INTERVAL` | `60` | Background rescan interval (seconds) |
-| `AGENT_KITCHEN_TERMINAL` | `ghostty` | Terminal app for session launch (`ghostty` or `terminal`) |
+| `AGENT_KITCHEN_TERMINAL` | `ghostty` | Terminal app (`ghostty` or `terminal`) |
 
-## Session Filtering
+## How It Works
 
-Only interactive sessions are shown. The scanner filters out:
+```
+JSONL session files (~/.claude, ~/.codex)
+  → Scanner (parse sessions, filter noise)
+  → Git Status (branch, dirty, unpushed)
+  → Cache (reuse prior summaries by mtime)
+  → LLM Summarizer (Claude Haiku via Agent SDK)
+  → Grouping (by repo, sorted by recency)
+  → FastAPI server (JSON API + static frontend)
+```
 
-- **Programmatic SDK sessions** — single-shot calls with ≤1 user turn (e.g., automated summarization pipelines)
-- **Subagent sessions** — child sessions spawned by the Agent tool, stored in `subagents/` subdirectories
-
-See [docs/session-formats.md](docs/session-formats.md) for details on session file formats.
+Only interactive sessions are shown. Programmatic SDK sessions (≤1 user turn) and subagent child sessions are filtered out. See [docs/session-formats.md](docs/session-formats.md) for details.
 
 ## Development
 
@@ -114,12 +125,9 @@ git clone https://github.com/haldar/agent-kitchen.git
 cd agent-kitchen
 uv pip install -e ".[dev]"
 
-# Run tests
-uv run pytest
-
-# Lint and format
-uvx ruff check --fix .
-uvx ruff format .
+uv run pytest                    # Run tests
+uvx ruff check --fix .           # Lint
+uvx ruff format .                # Format
 ```
 
 ## Requirements
