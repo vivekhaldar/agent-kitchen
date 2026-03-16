@@ -828,13 +828,100 @@
     if (e.target === $searchOverlay) closeSearch();
   });
 
+  // --- Keyboard Help Overlay ---
+
+  var $helpOverlay = document.getElementById("help-overlay");
+
+  function openHelp() {
+    $helpOverlay.classList.remove("hidden");
+  }
+
+  function closeHelp() {
+    $helpOverlay.classList.add("hidden");
+  }
+
+  $helpOverlay.addEventListener("click", function (e) {
+    if (e.target === $helpOverlay) closeHelp();
+  });
+
+  // --- Group Navigation (j/k) ---
+
+  var focusedGroupIdx = -1;
+
+  function getAllGroupElements() {
+    return Array.from($repoGroups.querySelectorAll(".repo-group"));
+  }
+
+  function setGroupFocus(idx) {
+    var groups = getAllGroupElements();
+    // Clear previous focus
+    groups.forEach(function (el) {
+      el.classList.remove("group-focused");
+    });
+    if (idx < 0 || idx >= groups.length) {
+      focusedGroupIdx = -1;
+      return;
+    }
+    focusedGroupIdx = idx;
+    groups[idx].classList.add("group-focused");
+    groups[idx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function toggleFocusedGroup() {
+    var groups = getAllGroupElements();
+    if (focusedGroupIdx < 0 || focusedGroupIdx >= groups.length) return;
+    var header = groups[focusedGroupIdx].querySelector(".repo-header");
+    if (header) header.click();
+  }
+
+  // --- Global Keyboard Handler ---
+
   document.addEventListener("keydown", function (e) {
-    // Don't trigger if typing in an input, textarea, or terminal is focused
+    // Don't trigger if typing in an input or textarea
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+
+    // Help overlay takes priority for close
+    if (!$helpOverlay.classList.contains("hidden")) {
+      if (e.key === "Escape" || e.key === "?") {
+        e.preventDefault();
+        closeHelp();
+      }
+      return;
+    }
+
+    // Escape closes active terminal tab (returns focus to dashboard)
+    if (e.key === "Escape" && activeTabId) {
+      e.preventDefault();
+      closeTab(activeTabId);
+      return;
+    }
+
+    // When terminal is focused, only Escape works (handled above)
     if (activeTabId) return;
+
     if (e.key === "/") {
       e.preventDefault();
       openSearch();
+    } else if (e.key === "?") {
+      e.preventDefault();
+      openHelp();
+    } else if (e.key === "r") {
+      e.preventDefault();
+      refreshSessions();
+    } else if (e.key === "j") {
+      e.preventDefault();
+      var groups = getAllGroupElements();
+      if (groups.length > 0) {
+        setGroupFocus(Math.min(focusedGroupIdx + 1, groups.length - 1));
+      }
+    } else if (e.key === "k") {
+      e.preventDefault();
+      if (focusedGroupIdx > 0) {
+        setGroupFocus(focusedGroupIdx - 1);
+      }
+    } else if (e.key === "Enter" && focusedGroupIdx >= 0) {
+      e.preventDefault();
+      toggleFocusedGroup();
     }
   });
 
