@@ -3,6 +3,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from agent_kitchen.cli import build_arg_parser, run_cli
 
 
@@ -118,3 +120,63 @@ class TestRunCli:
         with patch("agent_kitchen.cli.config") as mock_config:
             run_cli(["web", "--port", "7777"])
             assert mock_config.SERVER_PORT == 7777
+
+
+class TestArgParserEdgeCases:
+    """Tests for argument parsing edge cases."""
+
+    def test_missing_subcommand_raises(self):
+        parser = build_arg_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args([])
+        assert exc_info.value.code == 2
+
+    def test_invalid_subcommand_raises(self):
+        parser = build_arg_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["invalid"])
+        assert exc_info.value.code == 2
+
+    def test_non_integer_port_raises(self):
+        parser = build_arg_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["web", "--port", "abc"])
+        assert exc_info.value.code == 2
+
+    def test_negative_scan_days_is_accepted(self):
+        """Argparse doesn't validate negative ints, so this should parse fine."""
+        parser = build_arg_parser()
+        args = parser.parse_args(["web", "--scan-days", "-1"])
+        assert args.scan_days == -1
+
+    def test_web_summarize_default_false(self):
+        parser = build_arg_parser()
+        args = parser.parse_args(["web"])
+        assert args.summarize is False
+
+    def test_web_summarize_flag(self):
+        parser = build_arg_parser()
+        args = parser.parse_args(["web", "--summarize"])
+        assert args.summarize is True
+
+    def test_index_concurrency_default(self):
+        from agent_kitchen import config
+
+        parser = build_arg_parser()
+        args = parser.parse_args(["index"])
+        assert args.concurrency == config.SUMMARY_CONCURRENCY
+
+    def test_index_concurrency_custom(self):
+        parser = build_arg_parser()
+        args = parser.parse_args(["index", "--concurrency", "10"])
+        assert args.concurrency == 10
+
+    def test_index_all_flags_combined(self):
+        parser = build_arg_parser()
+        args = parser.parse_args(
+            ["index", "--scan-days", "7", "--concurrency", "5", "--dry-run", "--force"]
+        )
+        assert args.scan_days == 7
+        assert args.concurrency == 5
+        assert args.dry_run is True
+        assert args.force is True
