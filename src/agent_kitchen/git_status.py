@@ -2,10 +2,24 @@
 # ABOUTME: Detects repo roots from working directories and queries live git status.
 
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_git_env() -> dict[str, str]:
+    """Return a copy of os.environ without GIT_DIR and GIT_WORK_TREE.
+
+    These variables, when set by callers like pre-commit hooks, cause git
+    commands with -C to resolve against the wrong repository.
+    """
+    env = os.environ.copy()
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        env.pop(var, None)
+    return env
+
 
 # Module-level cache for repo root lookups (cwd -> repo_root or None)
 _repo_root_cache: dict[str, str | None] = {}
@@ -36,6 +50,7 @@ def get_repo_root(cwd: str, _cache: dict[str, str | None] | None = None) -> str 
             capture_output=True,
             text=True,
             timeout=5,
+            env=_clean_git_env(),
         )
         if result.returncode == 0:
             root = result.stdout.strip()
@@ -57,6 +72,7 @@ def get_git_status(repo_root: str) -> GitStatus | None:
             capture_output=True,
             text=True,
             timeout=5,
+            env=_clean_git_env(),
         )
         if check.returncode != 0:
             return None
@@ -71,6 +87,7 @@ def get_git_status(repo_root: str) -> GitStatus | None:
             capture_output=True,
             text=True,
             timeout=5,
+            env=_clean_git_env(),
         )
         branch = branch_result.stdout.strip() or None
     except (subprocess.TimeoutExpired, OSError):
@@ -85,6 +102,7 @@ def get_git_status(repo_root: str) -> GitStatus | None:
             capture_output=True,
             text=True,
             timeout=5,
+            env=_clean_git_env(),
         )
         porcelain_lines = [line for line in porcelain_result.stdout.splitlines() if line.strip()]
         untracked = sum(1 for line in porcelain_lines if line.startswith("??"))
