@@ -7,7 +7,7 @@ import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
-from agent_kitchen.config import HAIKU_MODEL, SUMMARY_CONCURRENCY
+from agent_kitchen.config import SUMMARY_CONCURRENCY
 from agent_kitchen.models import NonRepoGroup, RepoGroup, Session, TimelinePhase
 
 # Union type for groups that have timelines
@@ -142,27 +142,9 @@ def _format_sessions_for_prompt(sessions: list[Session]) -> str:
 
 async def _call_timeline_llm(prompt: str) -> dict:
     """Call Claude Haiku for timeline generation."""
-    import os
+    from agent_kitchen.llm import call_haiku_structured
 
-    from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
-
-    os.environ.pop("CLAUDECODE", None)
-
-    result: dict = {}
-    async for msg in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            model=HAIKU_MODEL,
-            max_turns=2,
-            output_format={
-                "type": "json_schema",
-                "schema": TIMELINE_SCHEMA,
-            },
-        ),
-    ):
-        if isinstance(msg, ResultMessage) and msg.structured_output:
-            result = msg.structured_output
-    return result
+    return await call_haiku_structured(prompt, TIMELINE_SCHEMA)
 
 
 def _group_name(group: TimelineGroup) -> str:

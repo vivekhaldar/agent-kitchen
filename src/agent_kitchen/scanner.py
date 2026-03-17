@@ -1,7 +1,6 @@
 # ABOUTME: Reads ~/.claude and ~/.codex session JSONL files and extracts Session metadata.
 # ABOUTME: Walks project directories, parses records, decodes paths, and yields Session objects.
 
-import json
 import logging
 import os
 import re
@@ -10,6 +9,7 @@ from pathlib import Path
 
 from agent_kitchen.config import CLAUDE_PROJECTS_DIR, CODEX_INDEX_PATH, CODEX_SESSIONS_DIR
 from agent_kitchen.models import Session
+from agent_kitchen.parsing import extract_text_from_content, parse_jsonl_line
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +19,7 @@ _SUMMARIZER_PROMPT_SIGNATURE = "You are analyzing a coding agent session"
 def _extract_message_text(record: dict) -> str:
     """Extract text from a record's message content (string or content-block array)."""
     content = record.get("message", {}).get("content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return " ".join(
-            block.get("text", "")
-            for block in content
-            if isinstance(block, dict) and block.get("type") == "text"
-        )
-    return ""
+    return extract_text_from_content(content)
 
 
 def decode_claude_project_path(dirname: str) -> str:
@@ -42,10 +34,7 @@ def decode_claude_project_path(dirname: str) -> str:
 
 def _parse_jsonl_line(line: str) -> dict | None:
     """Parse a single JSONL line, returning None on failure."""
-    try:
-        return json.loads(line)
-    except (json.JSONDecodeError, ValueError):
-        return None
+    return parse_jsonl_line(line)
 
 
 def _parse_timestamp(ts: str | None) -> datetime | None:

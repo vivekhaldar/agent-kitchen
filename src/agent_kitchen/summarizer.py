@@ -2,11 +2,11 @@
 # ABOUTME: Calls Claude Haiku via Agent SDK to generate summaries and classify session status.
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass
 
-from agent_kitchen.config import HAIKU_MODEL, SUMMARY_CONCURRENCY
+from agent_kitchen.config import SUMMARY_CONCURRENCY
+from agent_kitchen.parsing import extract_text_from_content, parse_jsonl_line
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +16,7 @@ LAST_MESSAGES_COUNT = 5
 
 def _parse_line(line: str) -> dict | None:
     """Parse a JSONL line, returning None on failure."""
-    try:
-        return json.loads(line)
-    except (json.JSONDecodeError, ValueError):
-        return None
+    return parse_jsonl_line(line)
 
 
 def _extract_text_from_content(content) -> str:
@@ -28,15 +25,7 @@ def _extract_text_from_content(content) -> str:
     Content can be a plain string or an array of content blocks.
     Tool use blocks are stripped — only text blocks are included.
     """
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-        return " ".join(parts)
-    return ""
+    return extract_text_from_content(content)
 
 
 def _truncate(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> str:
@@ -226,28 +215,9 @@ class SummarizeResult:
 
 async def _call_llm(prompt: str) -> dict:
     """Call Claude Haiku via the Agent SDK and return structured output as a dict."""
-    import os
+    from agent_kitchen.llm import call_haiku_structured
 
-    from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
-
-    # Allow running inside a Claude Code session (the SDK refuses nested sessions)
-    os.environ.pop("CLAUDECODE", None)
-
-    result: dict = {}
-    async for msg in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            model=HAIKU_MODEL,
-            max_turns=2,
-            output_format={
-                "type": "json_schema",
-                "schema": SUMMARY_SCHEMA,
-            },
-        ),
-    ):
-        if isinstance(msg, ResultMessage) and msg.structured_output:
-            result = msg.structured_output
-    return result
+    return await call_haiku_structured(prompt, SUMMARY_SCHEMA)
 
 
 def _make_fallback(context: str) -> SummarizeResult:

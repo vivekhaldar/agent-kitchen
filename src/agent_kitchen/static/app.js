@@ -159,142 +159,39 @@
     ' 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48' +
     ' 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
 
-  function renderRepoGroup(group, filteredSessions) {
-    if (filteredSessions.length === 0) return null;
+  function buildGroupHeaderHtml(opts, isExpanded, sessionCount) {
+    var chevron = '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>';
+    var icon = opts.icon || "";
+    var name = '<span class="repo-name">' + escapeHtml(opts.displayName) + "</span>";
+    var meta = '<span class="repo-meta">(' + opts.metaText + ")</span>";
+    var btn = '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(opts.cwd) + '">+</button>';
 
-    var isExpanded = expandedRepos.has(group.repo_root);
-    var container = document.createElement("div");
-    container.className = "repo-group";
-
-    // Git meta string
-    var metaParts = [];
-    if (group.git_branch) metaParts.push(group.git_branch);
-    if (group.git_dirty) metaParts.push('<span class="dirty">dirty</span>');
-    if (group.unpushed_commits > 0) metaParts.push('<span class="unpushed">' + group.unpushed_commits + " unpushed</span>");
-    if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push("clean");
-    metaParts.push(filteredSessions.length + " sessions");
-
-    var header = document.createElement("div");
-    header.className = "repo-header";
-    header.innerHTML =
-      '<div class="repo-header-left">' +
-      '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
-      OCTOCAT_SVG +
-      '<span class="repo-name">' + escapeHtml(group.repo_name) + "</span>" +
-      '<span class="repo-meta">(' + metaParts.join(", ") + ")</span>" +
-      "</div>" +
-      '<div class="repo-header-right">' +
-      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.repo_root) + '">+</button>' +
-      timeAgo(group.last_active) +
-      "</div>";
-
-    var sessionList = document.createElement("div");
-    sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
-
-    // Render timeline if present
-    if (group.timeline && group.timeline.length > 0) {
-      var timelineEl = document.createElement("div");
-      timelineEl.className = "repo-timeline";
-      group.timeline.forEach(function (phase) {
-        var phaseEl = document.createElement("div");
-        phaseEl.className = "timeline-phase";
-        phaseEl.innerHTML =
-          '<span class="timeline-period">' + escapeHtml(phase.period) + '</span>' +
-          '<span class="timeline-desc">' + escapeHtml(phase.description) + '</span>';
-        timelineEl.appendChild(phaseEl);
-      });
-      sessionList.appendChild(timelineEl);
-    }
-
-    var visibleCount = INITIAL_VISIBLE;
-    var showingAll = filteredSessions.length <= INITIAL_VISIBLE;
-
-    function renderVisibleSessions() {
-      // Preserve timeline element if present
-      var timeline = sessionList.querySelector(".repo-timeline");
-      sessionList.innerHTML = "";
-      if (timeline) sessionList.appendChild(timeline);
-
-      var toShow = showingAll ? filteredSessions : filteredSessions.slice(0, visibleCount);
-      toShow.forEach(function (session) {
-        sessionList.appendChild(renderSessionRow(session));
-      });
-      if (!showingAll) {
-        var moreBtn = document.createElement("div");
-        moreBtn.className = "show-more-btn";
-        moreBtn.textContent = "Show all " + filteredSessions.length + " sessions";
-        moreBtn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          showingAll = true;
-          renderVisibleSessions();
-          sessionList.style.maxHeight = sessionList.scrollHeight + "px";
-        });
-        sessionList.appendChild(moreBtn);
-      }
-    }
-    renderVisibleSessions();
-
-    header.querySelector(".btn-new-session").addEventListener("click", function (e) {
-      e.stopPropagation();
-      openNewSession(group.repo_root);
-    });
-
-    header.addEventListener("click", function () {
-      if (expandedRepos.has(group.repo_root)) {
-        expandedRepos.delete(group.repo_root);
-        sessionList.classList.add("collapsed");
-        header.querySelector(".repo-chevron").classList.remove("expanded");
-      } else {
-        expandedRepos.add(group.repo_root);
-        sessionList.classList.remove("collapsed");
-        sessionList.style.maxHeight = sessionList.scrollHeight + "px";
-        header.querySelector(".repo-chevron").classList.add("expanded");
-      }
-    });
-
-    // Set initial max-height for expanded groups
-    if (isExpanded) {
-      requestAnimationFrame(function () {
-        sessionList.style.maxHeight = sessionList.scrollHeight + "px";
-      });
-    }
-
-    container.appendChild(header);
-    container.appendChild(sessionList);
-    return container;
+    return (
+      '<div class="repo-header-left">' + chevron + icon + name + meta + "</div>" +
+      '<div class="repo-header-right">' + btn + timeAgo(opts.lastActive) + "</div>"
+    );
   }
 
-  function renderNonRepoGroup(group, filteredSessions) {
+  function renderGroup(opts, filteredSessions) {
     if (filteredSessions.length === 0) return null;
 
-    var isExpanded = expandedRepos.has(group.cwd);
+    var groupKey = opts.groupKey;
+    var isExpanded = expandedRepos.has(groupKey);
     var container = document.createElement("div");
     container.className = "repo-group";
 
-    // Use last path component as display name
-    var displayName = group.cwd.split("/").filter(Boolean).pop() || group.cwd;
-
     var header = document.createElement("div");
     header.className = "repo-header";
-    header.innerHTML =
-      '<div class="repo-header-left">' +
-      '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>' +
-      '<span class="repo-name">' + escapeHtml(displayName) + "</span>" +
-      '<span class="repo-meta">(' + filteredSessions.length + " sessions)</span>" +
-      "</div>" +
-      '<div class="repo-header-right">' +
-      '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(group.cwd) + '">+</button>' +
-      timeAgo(group.last_active) +
-      "</div>";
+    header.innerHTML = buildGroupHeaderHtml(opts, isExpanded, filteredSessions.length);
 
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
     // Render timeline if present
-    if (group.timeline && group.timeline.length > 0) {
+    if (opts.timeline && opts.timeline.length > 0) {
       var timelineEl = document.createElement("div");
       timelineEl.className = "repo-timeline";
-      group.timeline.forEach(function (phase) {
+      opts.timeline.forEach(function (phase) {
         var phaseEl = document.createElement("div");
         phaseEl.className = "timeline-phase";
         phaseEl.innerHTML =
@@ -308,7 +205,6 @@
     var showingAll = filteredSessions.length <= INITIAL_VISIBLE;
 
     function renderVisibleSessions() {
-      // Preserve timeline element if present
       var timeline = sessionList.querySelector(".repo-timeline");
       sessionList.innerHTML = "";
       if (timeline) sessionList.appendChild(timeline);
@@ -334,16 +230,16 @@
 
     header.querySelector(".btn-new-session").addEventListener("click", function (e) {
       e.stopPropagation();
-      openNewSession(group.cwd);
+      openNewSession(opts.cwd);
     });
 
     header.addEventListener("click", function () {
-      if (expandedRepos.has(group.cwd)) {
-        expandedRepos.delete(group.cwd);
+      if (expandedRepos.has(groupKey)) {
+        expandedRepos.delete(groupKey);
         sessionList.classList.add("collapsed");
         header.querySelector(".repo-chevron").classList.remove("expanded");
       } else {
-        expandedRepos.add(group.cwd);
+        expandedRepos.add(groupKey);
         sessionList.classList.remove("collapsed");
         sessionList.style.maxHeight = sessionList.scrollHeight + "px";
         header.querySelector(".repo-chevron").classList.add("expanded");
@@ -359,6 +255,39 @@
     container.appendChild(header);
     container.appendChild(sessionList);
     return container;
+  }
+
+  function renderRepoGroup(group, filteredSessions) {
+    var metaParts = [];
+    if (group.git_branch) metaParts.push(group.git_branch);
+    if (group.git_dirty) metaParts.push('<span class="dirty">dirty</span>');
+    if (group.unpushed_commits > 0) metaParts.push('<span class="unpushed">' + group.unpushed_commits + " unpushed</span>");
+    if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push("clean");
+    metaParts.push(filteredSessions.length + " sessions");
+
+    return renderGroup({
+      groupKey: group.repo_root,
+      displayName: group.repo_name,
+      icon: OCTOCAT_SVG,
+      metaText: metaParts.join(", "),
+      cwd: group.repo_root,
+      lastActive: group.last_active,
+      timeline: group.timeline,
+    }, filteredSessions);
+  }
+
+  function renderNonRepoGroup(group, filteredSessions) {
+    var displayName = group.cwd.split("/").filter(Boolean).pop() || group.cwd;
+
+    return renderGroup({
+      groupKey: group.cwd,
+      displayName: displayName,
+      icon: "",
+      metaText: filteredSessions.length + " sessions",
+      cwd: group.cwd,
+      lastActive: group.last_active,
+      timeline: group.timeline,
+    }, filteredSessions);
   }
 
   function render() {

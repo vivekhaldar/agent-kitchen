@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: uv run pytest
+        entry: env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_AUTHOR_DATE -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL -u GIT_COMMITTER_DATE uv run pytest
         language: system
         types: [python]
         pass_filenames: false
