@@ -40,80 +40,51 @@ def _make_session(**overrides) -> Session:
 
 
 class TestGitStatusSubprocessFailures:
-    """Tests that git_status handles subprocess failures in all git commands."""
+    """Tests that git_status handles subprocess failures gracefully."""
 
-    def test_branch_command_timeout_returns_status_with_none_branch(self):
-        """If branch --show-current times out, return status with None branch."""
+    def test_timeout_returns_none(self, tmp_path):
+        """If the status command times out, return None."""
+        # Create a .git dir so the os.path.exists check passes
+        (tmp_path / ".git").mkdir()
         with patch("agent_kitchen.git_status.subprocess.run") as mock_run:
-            # First call (verification) succeeds
-            # Second call (branch) times out
-            # Third call (porcelain) succeeds
-            # Fourth call (rev-list) succeeds
-            mock_run.side_effect = [
-                MagicMock(returncode=0, stdout=""),  # git rev-parse --git-dir
-                subprocess.TimeoutExpired(cmd="git", timeout=5),  # branch --show-current
-                MagicMock(returncode=0, stdout=""),  # status --porcelain
-                MagicMock(returncode=0, stdout="0\n"),  # rev-list --count
-            ]
-            status = get_git_status("/some/repo")
-            assert status is not None
-            assert status.branch is None
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=5)
+            status = get_git_status(str(tmp_path))
+            assert status is None
 
-    def test_porcelain_command_timeout_returns_status_with_defaults(self):
-        """If status --porcelain times out, return status with clean defaults."""
+    def test_empty_output_returns_safe_defaults(self, tmp_path):
+        """If status --porcelain -b returns empty output, defaults are safe."""
+        (tmp_path / ".git").mkdir()
         with patch("agent_kitchen.git_status.subprocess.run") as mock_run:
-            mock_run.side_effect = [
-                MagicMock(returncode=0, stdout=""),  # git rev-parse --git-dir
-                MagicMock(returncode=0, stdout="main\n"),  # branch --show-current
-                subprocess.TimeoutExpired(cmd="git", timeout=5),  # status --porcelain
-                MagicMock(returncode=0, stdout="0\n"),  # rev-list --count
-            ]
-            status = get_git_status("/some/repo")
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+            status = get_git_status(str(tmp_path))
             assert status is not None
             assert status.dirty is False
             assert status.untracked == 0
 
-    def test_revlist_command_timeout_returns_zero_unpushed(self):
-        """If rev-list times out, return status with 0 unpushed."""
+    def test_no_upstream_returns_zero_unpushed(self, tmp_path):
+        """If the branch header has no upstream info, unpushed is 0."""
+        (tmp_path / ".git").mkdir()
         with patch("agent_kitchen.git_status.subprocess.run") as mock_run:
-            mock_run.side_effect = [
-                MagicMock(returncode=0, stdout=""),  # git rev-parse --git-dir
-                MagicMock(returncode=0, stdout="main\n"),  # branch --show-current
-                MagicMock(returncode=0, stdout=""),  # status --porcelain
-                subprocess.TimeoutExpired(cmd="git", timeout=5),  # rev-list --count
-            ]
-            status = get_git_status("/some/repo")
+            mock_run.return_value = MagicMock(returncode=0, stdout="## main\n")
+            status = get_git_status(str(tmp_path))
             assert status is not None
             assert status.unpushed == 0
 
-    def test_all_post_verification_commands_fail_returns_safe_defaults(self):
-        """If all git commands after verification fail, return safe defaults."""
+    def test_oserror_returns_none(self, tmp_path):
+        """If the single git status call raises OSError, return None."""
+        (tmp_path / ".git").mkdir()
         with patch("agent_kitchen.git_status.subprocess.run") as mock_run:
-            mock_run.side_effect = [
-                MagicMock(returncode=0, stdout=""),  # git rev-parse --git-dir
-                OSError("git not found"),  # branch
-                OSError("git not found"),  # porcelain
-                OSError("git not found"),  # rev-list
-            ]
-            status = get_git_status("/some/repo")
-            assert status is not None
-            assert status.branch is None
-            assert status.dirty is False
-            assert status.untracked == 0
-            assert status.unpushed == 0
+            mock_run.side_effect = OSError("git not found")
+            status = get_git_status(str(tmp_path))
+            assert status is None
 
-    def test_branch_command_oserror_returns_none_branch(self):
-        """If branch command raises OSError, branch should be None."""
+    def test_file_not_found_returns_none(self, tmp_path):
+        """If git status fails with FileNotFoundError, return None."""
+        (tmp_path / ".git").mkdir()
         with patch("agent_kitchen.git_status.subprocess.run") as mock_run:
-            mock_run.side_effect = [
-                MagicMock(returncode=0, stdout=""),  # verification
-                OSError("Permission denied"),  # branch
-                MagicMock(returncode=0, stdout=""),  # porcelain
-                MagicMock(returncode=0, stdout="0\n"),  # rev-list
-            ]
-            status = get_git_status("/some/repo")
-            assert status is not None
-            assert status.branch is None
+            mock_run.side_effect = FileNotFoundError("git not found")
+            status = get_git_status(str(tmp_path))
+            assert status is None
 
 
 # --- cache.py error handling ---
