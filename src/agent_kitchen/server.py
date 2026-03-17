@@ -108,10 +108,11 @@ def _serialize_dashboard(data: dict) -> dict:
     }
 
 
-def _scan_and_group() -> tuple[list, dict]:
+def _scan_and_group(scan_days: int | None = None) -> tuple[list, dict]:
     """Scan sessions and group them (no LLM calls). Returns (all_sessions, dashboard_data)."""
     start = time.monotonic()
-    since = datetime.now(timezone.utc) - timedelta(days=_config.SCAN_WINDOW_DAYS)
+    days = scan_days if scan_days is not None else _config.SCAN_WINDOW_DAYS
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Scan both sources (each scanner is independent — one failing shouldn't block the other)
     claude_sessions: list = []
@@ -182,7 +183,7 @@ def _scan_and_group() -> tuple[list, dict]:
     return all_sessions, data
 
 
-async def _summarize_and_regroup(all_sessions: list) -> dict:
+async def _summarize_and_regroup(all_sessions: list, scan_days: int | None = None) -> dict:
     """Run LLM summarization on sessions that need it, then regroup."""
     start = time.monotonic()
     cache = SummaryCache(CACHE_DIR / "summaries.json")
@@ -191,7 +192,7 @@ async def _summarize_and_regroup(all_sessions: list) -> dict:
     ]
     if not needs_summary:
         logger.info("All sessions already have cached summaries")
-        return _scan_and_group()[1]
+        return _scan_and_group(scan_days=scan_days)[1]
 
     logger.info("Summarizing %d sessions via LLM", len(needs_summary))
 
@@ -225,13 +226,16 @@ async def _summarize_and_regroup(all_sessions: list) -> dict:
     }
 
 
-async def run_scan_pipeline() -> dict:
+async def run_scan_pipeline(scan_days: int | None = None) -> dict:
     """Run the full scan → summarize → group pipeline.
+
+    Args:
+        scan_days: Number of days to scan. Defaults to config.SCAN_WINDOW_DAYS.
 
     Returns a dict with repo_groups, non_repo_groups, last_scanned, scan_duration_ms.
     """
-    all_sessions, data = _scan_and_group()
-    data = await _summarize_and_regroup(all_sessions)
+    all_sessions, data = _scan_and_group(scan_days=scan_days)
+    data = await _summarize_and_regroup(all_sessions, scan_days=scan_days)
     return data
 
 
@@ -384,12 +388,7 @@ def create_app(
     @app.get("/api/refresh")
     async def refresh(scan_days: int = Query(default=_config.SCAN_WINDOW_DAYS)):
         global _dashboard_data
-        saved = _config.SCAN_WINDOW_DAYS
-        _config.SCAN_WINDOW_DAYS = scan_days
-        try:
-            data = await run_scan_pipeline()
-        finally:
-            _config.SCAN_WINDOW_DAYS = saved
+        data = await run_scan_pipeline(scan_days=scan_days)
         _dashboard_data = data
         return JSONResponse(content=_serialize_dashboard(data))
 

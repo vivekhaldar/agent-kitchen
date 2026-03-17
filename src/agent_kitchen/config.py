@@ -40,15 +40,20 @@ def setup_auth() -> None:
         return
 
     # Fallback: try the `pass` password manager
-    result = subprocess.run(
-        ["pass", "dev/CLAUDE_SUBSCRIPTION_TOKEN"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = result.stdout.strip()
-        logger.info("Auth configured via pass password manager")
-        return
+    try:
+        result = subprocess.run(
+            ["pass", "dev/CLAUDE_SUBSCRIPTION_TOKEN"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = result.stdout.strip()
+            logger.info("Auth configured via pass password manager")
+            return
+    except FileNotFoundError:
+        logger.debug("pass password manager not installed, skipping")
+    except OSError as e:
+        logger.debug("Failed to run pass: %s", e)
 
     raise RuntimeError(
         "No Claude API credentials found. Set ANTHROPIC_API_KEY or "
