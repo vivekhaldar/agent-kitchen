@@ -1,6 +1,7 @@
 # ABOUTME: Tests for git status checker module.
 # ABOUTME: Covers repo root detection, git status parsing, caching, and error handling.
 
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -11,14 +12,15 @@ from agent_kitchen.git_status import GitStatus, get_git_status, get_repo_root
 
 @pytest.fixture(autouse=True)
 def _clean_git_env(monkeypatch):
-    """Strip GIT_DIR and GIT_WORK_TREE so test git commands operate on temp repos.
+    """Remove git-related env vars so tests with tmp_path repos aren't
+    polluted by the parent worktree environment (e.g. when run via pre-commit).
+    Also clear the module-level repo root cache between tests."""
+    for var in list(os.environ):
+        if var.startswith("GIT_"):
+            monkeypatch.delenv(var, raising=False)
+    from agent_kitchen.git_status import _repo_root_cache
 
-    Pre-commit and git worktrees set these env vars, which cause git init/status
-    in temp directories to operate on the parent worktree instead.
-    """
-    monkeypatch.delenv("GIT_DIR", raising=False)
-    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
-    monkeypatch.delenv("GIT_INDEX_FILE", raising=False)
+    _repo_root_cache.clear()
 
 
 class TestGetRepoRoot:

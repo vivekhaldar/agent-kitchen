@@ -2,7 +2,7 @@
 # ABOUTME: Validates day bucketing, fallback phases, LLM integration, and caching.
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -364,3 +364,145 @@ class TestApplyCachedTimelines:
 
         assert len(group.timeline) == 1
         assert group.timeline[0].description == "Fallback work"
+
+
+class TestFormatDateRange:
+    """Tests for _format_date_range edge cases."""
+
+    def test_same_date_returns_single_period(self):
+        from agent_kitchen.timeline import _format_date_range
+
+        d = date(2026, 3, 15)
+        result = _format_date_range(d, d)
+        # Should delegate to _format_period for a single date
+        assert result  # non-empty string
+
+    def test_cross_month_range(self):
+        from agent_kitchen.timeline import _format_date_range
+
+        start = date(2026, 2, 27)
+        end = date(2026, 3, 3)
+        result = _format_date_range(start, end)
+        assert "Feb" in result
+        assert "Mar" in result
+
+    def test_same_month_range(self):
+        from agent_kitchen.timeline import _format_date_range
+
+        start = date(2026, 3, 10)
+        end = date(2026, 3, 15)
+        result = _format_date_range(start, end)
+        assert "Mar" in result
+        assert "10" in result
+        assert "15" in result
+
+    def test_yesterday_today_range(self):
+        from agent_kitchen.timeline import _format_date_range
+
+        today = datetime.now().astimezone().date()
+        yesterday = today - timedelta(days=1)
+        result = _format_date_range(yesterday, today)
+        assert result == "Yesterday-Today"
+
+    def test_today_only(self):
+        from agent_kitchen.timeline import _format_date_range
+
+        today = datetime.now().astimezone().date()
+        result = _format_date_range(today, today)
+        assert result == "Today"
+
+    def test_yesterday_only(self):
+        from agent_kitchen.timeline import _format_date_range
+
+        yesterday = datetime.now().astimezone().date() - timedelta(days=1)
+        result = _format_date_range(yesterday, yesterday)
+        assert result == "Yesterday"
+
+
+class TestAggregateStatus:
+    """Tests for _aggregate_status with various status combinations."""
+
+    def test_all_done_statuses(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [
+            _make_session(session_id="s1", status="done"),
+            _make_session(session_id="s2", status="likely done"),
+        ]
+        assert _aggregate_status(sessions) == "done"
+
+    def test_all_active_statuses(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [
+            _make_session(session_id="s1", status="in progress"),
+            _make_session(session_id="s2", status="likely in progress"),
+        ]
+        assert _aggregate_status(sessions) == "in progress"
+
+    def test_active_and_done_returns_mixed(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [
+            _make_session(session_id="s1", status="done"),
+            _make_session(session_id="s2", status="in progress"),
+        ]
+        assert _aggregate_status(sessions) == "mixed"
+
+    def test_waiting_for_input_is_active(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [
+            _make_session(session_id="s1", status="waiting for input"),
+        ]
+        assert _aggregate_status(sessions) == "in progress"
+
+    def test_waiting_and_done_returns_mixed(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [
+            _make_session(session_id="s1", status="waiting for input"),
+            _make_session(session_id="s2", status="done"),
+        ]
+        assert _aggregate_status(sessions) == "mixed"
+
+    def test_single_done_session(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [_make_session(status="done")]
+        assert _aggregate_status(sessions) == "done"
+
+    def test_unknown_status_returns_mixed(self):
+        from agent_kitchen.timeline import _aggregate_status
+
+        sessions = [_make_session(status="something_unknown")]
+        assert _aggregate_status(sessions) == "mixed"
+
+
+class TestFallbackTimelineEdgeCases:
+    """Additional edge case tests for fallback_timeline."""
+
+    def test_session_with_no_summary_uses_default(self):
+        s = _make_session(summary="")
+        phases = fallback_timeline([s])
+        assert len(phases) == 1
+        assert phases[0].description == "Work session"
+
+    def test_multiple_sessions_same_day(self):
+        s1 = _make_session(
+            session_id="s1",
+            started_at=datetime(2026, 3, 15, 8, tzinfo=timezone.utc),
+            last_active=datetime(2026, 3, 15, 9, tzinfo=timezone.utc),
+            summary="Morning work",
+        )
+        s2 = _make_session(
+            session_id="s2",
+            started_at=datetime(2026, 3, 15, 14, tzinfo=timezone.utc),
+            last_active=datetime(2026, 3, 15, 16, tzinfo=timezone.utc),
+            summary="Afternoon work",
+        )
+        phases = fallback_timeline([s1, s2])
+        assert len(phases) == 1
+        assert phases[0].session_count == 2
+        # Most recent session's summary should be used
+        assert phases[0].description == "Afternoon work"

@@ -2,6 +2,7 @@
 # ABOUTME: Covers /api/sessions, /api/refresh, /api/launch, scan pipeline, and periodic rescan.
 
 import asyncio
+import subprocess
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -334,6 +335,139 @@ class TestSerialization:
         resp = client.get("/api/sessions")
         group = resp.json()["repo_groups"][0]
         assert "2026-03-10" in group["last_active"]
+
+
+class TestSerializeDashboard:
+    """Tests for _serialize_dashboard with various data shapes."""
+
+    def test_empty_groups(self):
+        from agent_kitchen.server import _serialize_dashboard
+
+        data = {
+            "repo_groups": [],
+            "non_repo_groups": [],
+            "last_scanned": "2026-03-10T12:00:00Z",
+            "scan_duration_ms": 100,
+        }
+        result = _serialize_dashboard(data)
+        assert result["repo_groups"] == []
+        assert result["non_repo_groups"] == []
+        assert result["last_scanned"] == "2026-03-10T12:00:00Z"
+        assert result["scan_duration_ms"] == 100
+
+    def test_missing_fields_use_defaults(self):
+        from agent_kitchen.server import _serialize_dashboard
+
+        result = _serialize_dashboard({})
+        assert result["repo_groups"] == []
+        assert result["non_repo_groups"] == []
+        assert result["last_scanned"] == ""
+        assert result["scan_duration_ms"] == 0
+
+    def test_datetime_serialized_to_iso(self):
+        from agent_kitchen.server import _serialize_dashboard
+
+        group = _make_repo_group()
+        data = {
+            "repo_groups": [group],
+            "non_repo_groups": [],
+            "last_scanned": datetime(2026, 3, 10, 12, 0, tzinfo=timezone.utc).isoformat(),
+            "scan_duration_ms": 50,
+        }
+        result = _serialize_dashboard(data)
+        session = result["repo_groups"][0]["sessions"][0]
+        assert isinstance(session["started_at"], str)
+        assert "2026-03-10" in session["started_at"]
+
+    def test_non_repo_group_serialization(self):
+        from agent_kitchen.server import _serialize_dashboard
+
+        non_repo = _make_non_repo_group()
+        data = {
+            "repo_groups": [],
+            "non_repo_groups": [non_repo],
+            "last_scanned": "",
+            "scan_duration_ms": 0,
+        }
+        result = _serialize_dashboard(data)
+        assert len(result["non_repo_groups"]) == 1
+        assert result["non_repo_groups"][0]["cwd"] == "/Users/test/Desktop"
+
+    def test_timeline_phases_serialized(self):
+        from agent_kitchen.models import TimelinePhase
+        from agent_kitchen.server import _serialize_dashboard
+
+        group = _make_repo_group()
+        group.timeline = [
+            TimelinePhase(
+                period="Today",
+                description="Fixed bugs",
+                session_count=2,
+                status="done",
+            )
+        ]
+        data = {
+            "repo_groups": [group],
+            "non_repo_groups": [],
+            "last_scanned": "",
+            "scan_duration_ms": 0,
+        }
+        result = _serialize_dashboard(data)
+        timeline = result["repo_groups"][0]["timeline"]
+        assert len(timeline) == 1
+        assert timeline[0]["period"] == "Today"
+        assert timeline[0]["description"] == "Fixed bugs"
+
+    def test_multiple_repo_groups(self):
+        from agent_kitchen.server import _serialize_dashboard
+
+        g1 = _make_repo_group(repo_name="project-a")
+        g2 = _make_repo_group(repo_name="project-b")
+        data = {
+            "repo_groups": [g1, g2],
+            "non_repo_groups": [],
+            "last_scanned": "",
+            "scan_duration_ms": 0,
+        }
+        result = _serialize_dashboard(data)
+        assert len(result["repo_groups"]) == 2
+        assert result["repo_groups"][0]["repo_name"] == "project-a"
+        assert result["repo_groups"][1]["repo_name"] == "project-b"
+
+
+class TestLaunchErrorPaths:
+    """Additional tests for /api/launch error paths."""
+
+    def test_launch_empty_source_returns_400(self, client):
+        resp = client.get(
+            "/api/launch",
+            params={"source": "", "session_id": "abc", "cwd": "/tmp"},
+        )
+        assert resp.status_code == 400
+
+    def test_launch_subprocess_called_process_error(self, client):
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "open")
+            resp = client.get(
+                "/api/launch",
+                params={"source": "claude", "session_id": "abc", "cwd": "/tmp"},
+            )
+            assert resp.status_code == 500
+            assert "error" in resp.json()
+
+    def test_launch_missing_session_id(self, client):
+        resp = client.get(
+            "/api/launch",
+            params={"source": "claude", "cwd": "/tmp"},
+        )
+        assert resp.status_code == 422
+
+    def test_launch_missing_cwd(self, client):
+        resp = client.get(
+            "/api/launch",
+            params={"source": "claude", "session_id": "abc"},
+        )
+        assert resp.status_code == 422
 
 
 # --- Scan pipeline ---

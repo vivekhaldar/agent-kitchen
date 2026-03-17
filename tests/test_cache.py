@@ -138,3 +138,94 @@ def test_multiple_sessions(tmp_path):
     assert cache2.get("s1")["summary"] == "First session"
     assert cache2.get("s2")["status"] == "in progress"
     assert cache2.get("s3")["status"] == "waiting for input"
+
+
+def test_merge_on_save_preserves_concurrent_writes(tmp_path):
+    """Simulate concurrent cache writes and verify entries aren't lost.
+
+    Process A loads, adds entries. Then process B writes new entries to disk.
+    When process A saves, it should merge B's entries with its own.
+    """
+    cache_path = tmp_path / "summaries.json"
+
+    # Process A loads cache and adds entries
+    cache_a = SummaryCache(cache_path)
+    cache_a.set("s1", "Session from A", "done", 100.0)
+
+    # Process B writes to the same file independently
+    cache_b = SummaryCache(cache_path)
+    cache_b.set("s2", "Session from B", "in progress", 200.0)
+    cache_b.save()
+
+    # Process A saves — should merge with B's entries
+    cache_a.save()
+
+    # Reload and verify both entries exist
+    cache_final = SummaryCache(cache_path)
+    assert cache_final.get("s1") is not None
+    assert cache_final.get("s1")["summary"] == "Session from A"
+    assert cache_final.get("s2") is not None
+    assert cache_final.get("s2")["summary"] == "Session from B"
+
+
+def test_merge_on_save_in_memory_wins_for_same_key(tmp_path):
+    """When both processes write the same key, in-memory entry should win."""
+    cache_path = tmp_path / "summaries.json"
+
+    # Process A loads and sets s1
+    cache_a = SummaryCache(cache_path)
+    cache_a.set("s1", "A's version", "done", 200.0)
+
+    # Process B writes s1 with a different value
+    cache_b = SummaryCache(cache_path)
+    cache_b.set("s1", "B's version", "in progress", 100.0)
+    cache_b.save()
+
+    # Process A saves — its entry should win
+    cache_a.save()
+
+    cache_final = SummaryCache(cache_path)
+    assert cache_final.get("s1")["summary"] == "A's version"
+
+
+def test_merge_on_save_with_corrupted_disk(tmp_path):
+    """If disk cache is corrupted at save time, should proceed with in-memory entries only."""
+    cache_path = tmp_path / "summaries.json"
+
+    cache = SummaryCache(cache_path)
+    cache.set("s1", "In memory", "done", 100.0)
+
+    # Corrupt the file between load and save
+    cache_path.write_text("corrupted{{{not json")
+
+    # Save should succeed without losing in-memory data
+    cache.save()
+
+    cache_final = SummaryCache(cache_path)
+    assert cache_final.get("s1")["summary"] == "In memory"
+
+
+def test_merge_preserves_many_entries(tmp_path):
+    """Merge should handle many entries from both sources."""
+    cache_path = tmp_path / "summaries.json"
+
+    # Process A adds 50 entries
+    cache_a = SummaryCache(cache_path)
+    for i in range(50):
+        cache_a.set(f"a-{i}", f"Summary A-{i}", "done", float(i))
+
+    # Process B adds 50 different entries
+    cache_b = SummaryCache(cache_path)
+    for i in range(50):
+        cache_b.set(f"b-{i}", f"Summary B-{i}", "done", float(i))
+    cache_b.save()
+
+    # Process A saves, merging
+    cache_a.save()
+
+    cache_final = SummaryCache(cache_path)
+    # All 100 entries should be present
+    assert len(cache_final.entries) == 100
+    for i in range(50):
+        assert cache_final.get(f"a-{i}") is not None
+        assert cache_final.get(f"b-{i}") is not None
