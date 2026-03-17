@@ -1,5 +1,5 @@
 # ABOUTME: Tests for the summary cache layer.
-# ABOUTME: Validates load, save, get, set, and invalidation logic.
+# ABOUTME: Validates load, save, get, set, invalidation, validation, and eviction.
 
 import json
 
@@ -121,10 +121,16 @@ def test_load_corrupted_file(tmp_path):
 
 def test_load_wrong_version(tmp_path):
     cache_path = tmp_path / "summaries.json"
-    cache_path.write_text(json.dumps({"version": 999, "entries": {"s1": {}}}))
+    valid_entry = {
+        "summary": "Test",
+        "status": "done",
+        "file_mtime": 100.0,
+        "generated_at": "2026-01-01T00:00:00+00:00",
+    }
+    cache_path.write_text(json.dumps({"version": 999, "entries": {"s1": valid_entry}}))
     cache = SummaryCache(cache_path)
     # Should still load — version is informational for now
-    assert cache.entries == {"s1": {}}
+    assert "s1" in cache.entries
 
 
 def test_multiple_sessions(tmp_path):
@@ -141,26 +147,18 @@ def test_multiple_sessions(tmp_path):
 
 
 def test_merge_on_save_preserves_concurrent_writes(tmp_path):
-    """Simulate concurrent cache writes and verify entries aren't lost.
-
-    Process A loads, adds entries. Then process B writes new entries to disk.
-    When process A saves, it should merge B's entries with its own.
-    """
+    """Simulate concurrent cache writes and verify entries aren't lost."""
     cache_path = tmp_path / "summaries.json"
 
-    # Process A loads cache and adds entries
     cache_a = SummaryCache(cache_path)
     cache_a.set("s1", "Session from A", "done", 100.0)
 
-    # Process B writes to the same file independently
     cache_b = SummaryCache(cache_path)
     cache_b.set("s2", "Session from B", "in progress", 200.0)
     cache_b.save()
 
-    # Process A saves — should merge with B's entries
     cache_a.save()
 
-    # Reload and verify both entries exist
     cache_final = SummaryCache(cache_path)
     assert cache_final.get("s1") is not None
     assert cache_final.get("s1")["summary"] == "Session from A"
@@ -172,16 +170,13 @@ def test_merge_on_save_in_memory_wins_for_same_key(tmp_path):
     """When both processes write the same key, in-memory entry should win."""
     cache_path = tmp_path / "summaries.json"
 
-    # Process A loads and sets s1
     cache_a = SummaryCache(cache_path)
     cache_a.set("s1", "A's version", "done", 200.0)
 
-    # Process B writes s1 with a different value
     cache_b = SummaryCache(cache_path)
     cache_b.set("s1", "B's version", "in progress", 100.0)
     cache_b.save()
 
-    # Process A saves — its entry should win
     cache_a.save()
 
     cache_final = SummaryCache(cache_path)
@@ -195,10 +190,8 @@ def test_merge_on_save_with_corrupted_disk(tmp_path):
     cache = SummaryCache(cache_path)
     cache.set("s1", "In memory", "done", 100.0)
 
-    # Corrupt the file between load and save
     cache_path.write_text("corrupted{{{not json")
 
-    # Save should succeed without losing in-memory data
     cache.save()
 
     cache_final = SummaryCache(cache_path)
@@ -209,23 +202,148 @@ def test_merge_preserves_many_entries(tmp_path):
     """Merge should handle many entries from both sources."""
     cache_path = tmp_path / "summaries.json"
 
-    # Process A adds 50 entries
     cache_a = SummaryCache(cache_path)
     for i in range(50):
         cache_a.set(f"a-{i}", f"Summary A-{i}", "done", float(i))
 
-    # Process B adds 50 different entries
     cache_b = SummaryCache(cache_path)
     for i in range(50):
         cache_b.set(f"b-{i}", f"Summary B-{i}", "done", float(i))
     cache_b.save()
 
-    # Process A saves, merging
     cache_a.save()
 
     cache_final = SummaryCache(cache_path)
-    # All 100 entries should be present
     assert len(cache_final.entries) == 100
     for i in range(50):
         assert cache_final.get(f"a-{i}") is not None
         assert cache_final.get(f"b-{i}") is not None
+
+
+def test_set_includes_type_field(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json")
+    cache.set("s1", "Summary text", "done", 100.0)
+    entry = cache.get("s1")
+    assert entry["type"] == "summary"
+
+
+def test_set_timeline(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json")
+    phases = [
+        {
+            "period": "Today",
+            "description": "Work",
+            "session_count": 1,
+            "status": "done",
+        }
+    ]
+    cache.set_timeline("tl1", phases, 100.0)
+    entry = cache.get("tl1")
+    assert entry["type"] == "timeline"
+    assert entry["status"] == "timeline"
+    assert json.loads(entry["summary"]) == phases
+    assert entry["file_mtime"] == 100.0
+    assert "generated_at" in entry
+
+
+def test_set_timeline_roundtrip(tmp_path):
+    cache_path = tmp_path / "summaries.json"
+    cache = SummaryCache(cache_path)
+    phases = [
+        {
+            "period": "Today",
+            "description": "Fix bugs",
+            "session_count": 2,
+            "status": "done",
+        },
+        {
+            "period": "Yesterday",
+            "description": "Add feature",
+            "session_count": 1,
+            "status": "done",
+        },
+    ]
+    cache.set_timeline("tl1", phases, 200.0)
+    cache.save()
+
+    cache2 = SummaryCache(cache_path)
+    entry = cache2.get("tl1")
+    assert entry["type"] == "timeline"
+    assert json.loads(entry["summary"]) == phases
+
+
+def test_load_drops_malformed_entries(tmp_path):
+    cache_path = tmp_path / "summaries.json"
+    entries = {
+        "good": {
+            "summary": "Valid",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+        },
+        "bad_missing_summary": {
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+        },
+        "bad_empty": {},
+        "bad_not_dict": "string_value",
+    }
+    cache_path.write_text(json.dumps({"version": 1, "entries": entries}))
+    cache = SummaryCache(cache_path)
+    assert "good" in cache.entries
+    assert "bad_missing_summary" not in cache.entries
+    assert "bad_empty" not in cache.entries
+    assert "bad_not_dict" not in cache.entries
+
+
+def test_eviction_removes_oldest(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json", max_entries=3)
+    cache.entries = {
+        "s1": {
+            "summary": "A",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+        },
+        "s2": {
+            "summary": "B",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-02T00:00:00+00:00",
+        },
+        "s3": {
+            "summary": "C",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-03T00:00:00+00:00",
+        },
+        "s4": {
+            "summary": "D",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-04T00:00:00+00:00",
+        },
+        "s5": {
+            "summary": "E",
+            "status": "done",
+            "file_mtime": 100.0,
+            "generated_at": "2026-01-05T00:00:00+00:00",
+        },
+    }
+    cache.save()
+
+    assert len(cache.entries) == 3
+    assert "s1" not in cache.entries
+    assert "s2" not in cache.entries
+    assert "s3" in cache.entries
+    assert "s4" in cache.entries
+    assert "s5" in cache.entries
+
+
+def test_eviction_not_triggered_under_limit(tmp_path):
+    cache = SummaryCache(tmp_path / "summaries.json", max_entries=100)
+    cache.set("s1", "Test", "done", 100.0)
+    cache.set("s2", "Test", "done", 200.0)
+    cache.save()
+    assert len(cache.entries) == 2
