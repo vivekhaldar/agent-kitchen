@@ -465,11 +465,48 @@ body {
   font-size: 15px;
 }
 
+.empty-state-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.empty-state-body {
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.empty-state-body p {
+  margin-bottom: 8px;
+}
+
 .empty-state code {
   font-family: var(--font-mono);
   background: var(--bg-surface);
   padding: 2px 6px;
   font-size: 13px;
+}
+
+/* ===== Search Hint Bar ===== */
+
+.search-hint-bar {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-bottom: 8px;
+}
+
+.search-hint-bar kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-right: 4px;
 }
 
 /* ===== Repo Group ===== */
@@ -932,5 +969,55 @@ body.terminal-open .content {
   .status-label,
   .time-ago {
     display: none;
+  }
+}
+
+/* ===== Dark Mode ===== */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #111111;
+    --bg-secondary: #1a1a1a;
+    --bg-hover: #252525;
+    --bg-surface: #222222;
+
+    --text-primary: #EEEEEE;
+    --text-secondary: #BBBBBB;
+    --text-muted: #777777;
+
+    --border: #333333;
+    --border-light: #2a2a2a;
+
+    --accent-dim: rgba(255, 77, 0, 0.15);
+
+    --status-done: #888888;
+    --status-likely-done: #666666;
+
+    --badge-claude: #DDDDDD;
+    --badge-codex: #AAAAAA;
+  }
+
+  .status-label.done {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .status-label.likely-done {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .status-label.likely-in-progress {
+    background: rgba(255, 128, 64, 0.15);
+  }
+
+  .status-label.waiting-for-input {
+    background: rgba(204, 170, 0, 0.15);
+  }
+
+  .search-overlay {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  .source-badge {
+    border-color: var(--border);
   }
 }

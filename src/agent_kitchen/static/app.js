@@ -160,11 +160,11 @@
     ' 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
 
   function buildGroupHeaderHtml(opts, isExpanded, sessionCount) {
-    var chevron = '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '">\u25B6</span>';
+    var chevron = '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '" aria-hidden="true">\u25B6</span>';
     var icon = opts.icon || "";
     var name = '<span class="repo-name">' + escapeHtml(opts.displayName) + "</span>";
     var meta = '<span class="repo-meta">(' + opts.metaText + ")</span>";
-    var btn = '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(opts.cwd) + '">+</button>';
+    var btn = '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(opts.cwd) + '" aria-label="New session in ' + escapeHtml(opts.displayName) + '">+</button>';
 
     return (
       '<div class="repo-header-left">' + chevron + icon + name + meta + "</div>" +
@@ -182,6 +182,9 @@
 
     var header = document.createElement("div");
     header.className = "repo-header";
+    header.setAttribute("role", "button");
+    header.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+    header.setAttribute("tabindex", "0");
     header.innerHTML = buildGroupHeaderHtml(opts, isExpanded, filteredSessions.length);
 
     var sessionList = document.createElement("div");
@@ -238,11 +241,13 @@
         expandedRepos.delete(groupKey);
         sessionList.classList.add("collapsed");
         header.querySelector(".repo-chevron").classList.remove("expanded");
+        header.setAttribute("aria-expanded", "false");
       } else {
         expandedRepos.add(groupKey);
         sessionList.classList.remove("collapsed");
         sessionList.style.maxHeight = sessionList.scrollHeight + "px";
         header.querySelector(".repo-chevron").classList.add("expanded");
+        header.setAttribute("aria-expanded", "true");
       }
     });
 
@@ -635,8 +640,10 @@
 
   var searchSelectedIdx = 0;
   var searchMatches = [];
+  var previouslyFocusedElement = null;
 
   function openSearch() {
+    previouslyFocusedElement = document.activeElement;
     $searchOverlay.classList.remove("hidden");
     $searchInput.value = "";
     $searchResults.innerHTML = "";
@@ -649,6 +656,10 @@
     $searchOverlay.classList.add("hidden");
     $searchInput.value = "";
     $searchResults.innerHTML = "";
+    if (previouslyFocusedElement && previouslyFocusedElement.focus) {
+      previouslyFocusedElement.focus();
+    }
+    previouslyFocusedElement = null;
   }
 
   function performSearch(query) {
