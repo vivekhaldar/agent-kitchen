@@ -119,6 +119,28 @@
     return result;
   }
 
+  function parsePhaseDate(phase) {
+    // Use start_date (ISO) if available, otherwise parse the period string
+    if (phase.start_date) {
+      return new Date(phase.start_date + "T00:00:00").getTime();
+    }
+    var period = phase.period || "";
+    var now = new Date();
+    if (period === "Today") return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (period === "Yesterday") return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+    // Parse "Mar 17" or "Mar 10-12" (use first date in range)
+    var months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    var m = period.match(/^([A-Z][a-z]{2})\s+(\d+)/);
+    if (m && months[m[1]] !== undefined) {
+      var year = now.getFullYear();
+      var d = new Date(year, months[m[1]], parseInt(m[2], 10));
+      // If the parsed date is in the future, it's from last year
+      if (d.getTime() > now.getTime() + 86400000) d.setFullYear(year - 1);
+      return d.getTime();
+    }
+    return 0; // can't parse — don't filter
+  }
+
   function filterSessionByTime(session) {
     if (timeFilterDays === Infinity) return true;
     if (!session.last_active) return false;
@@ -196,10 +218,9 @@
       timelineEl.className = "repo-timeline";
       var cutoff = timeFilterDays === Infinity ? 0 : Date.now() - timeFilterDays * 24 * 60 * 60 * 1000;
       opts.timeline.forEach(function (phase) {
-        // Filter out phases older than the time slider cutoff
-        if (cutoff > 0 && phase.start_date) {
-          var phaseDate = new Date(phase.start_date + "T00:00:00").getTime();
-          if (phaseDate < cutoff) return;
+        if (cutoff > 0) {
+          var phaseTime = parsePhaseDate(phase);
+          if (phaseTime > 0 && phaseTime < cutoff) return;
         }
         var phaseEl = document.createElement("div");
         phaseEl.className = "timeline-phase";
