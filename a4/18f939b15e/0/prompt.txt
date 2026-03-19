@@ -1,0 +1,1 @@
+do as much as you can with gh cli; yes, move it into docs/, keep it as simple as possible; then tell me what i absolutely must do manually
