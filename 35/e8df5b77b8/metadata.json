@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "35e8df5b77b8",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/agent_kitchen/timeline.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/35/e8df5b77b8/0/metadata.json",
+      "transcript": "/35/e8df5b77b8/0/full.jsonl",
+      "content_hash": "/35/e8df5b77b8/0/content_hash.txt",
+      "prompt": "/35/e8df5b77b8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 97,
+    "cache_creation_tokens": 224696,
+    "cache_read_tokens": 4509160,
+    "output_tokens": 19174,
+    "api_call_count": 87
+  }
+}
