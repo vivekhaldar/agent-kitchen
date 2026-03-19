@@ -256,8 +256,10 @@ async def batch_generate_timelines(
             if cached and cached.get("type") == "timeline":
                 try:
                     phases_data = json.loads(cached["summary"])
-                    group.timeline = [TimelinePhase(**p) for p in phases_data]
-                    return
+                    cached_count = sum(p.get("session_count", 0) for p in phases_data)
+                    if cached_count == len(group.sessions):
+                        group.timeline = [TimelinePhase(**p) for p in phases_data]
+                        return
                 except (json.JSONDecodeError, TypeError, KeyError):
                     pass
 
@@ -293,10 +295,13 @@ def apply_cached_timelines(groups: list[TimelineGroup], cache) -> None:
             if cached and cached.get("type") == "timeline":
                 try:
                     phases_data = json.loads(cached["summary"])
-                    group.timeline = [TimelinePhase(**p) for p in phases_data]
-                    continue
+                    # Invalidate if session count changed significantly
+                    cached_count = sum(p.get("session_count", 0) for p in phases_data)
+                    if cached_count == len(group.sessions):
+                        group.timeline = [TimelinePhase(**p) for p in phases_data]
+                        continue
                 except (json.JSONDecodeError, TypeError, KeyError):
                     pass
 
-        # No cache hit — use fallback
+        # No cache hit or stale — regenerate
         group.timeline = fallback_timeline(group.sessions)
