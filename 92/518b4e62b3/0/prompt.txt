@@ -1,0 +1,12 @@
+suggest some good domain names for this project. check availability
+
+---
+
+ok i ended up buying this domain -- 
+
+
+in a new folder in this repo, craft a kick ass public webpage for this agent-kitchen. really sell it. use your frontend skills. it should have a nerdy developer vibe, since that is the target audience. show me me the page locally when you're done. later we will work to publish it on that domain using github pages or something
+
+---
+
+ok that's cool, but i want the tagline to not just be "browser history" but also emphasize *sense-making* --- how do you understand and make sense of what you did in all those sessions ??
