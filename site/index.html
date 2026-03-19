@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Kitchen — Your AI agent sessions, unified</title>
+  <meta name="description" content="A local dashboard that unifies Claude Code and Codex CLI sessions. See what every agent did, resume any session, track git status — one command, zero config.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg-raised: #111111;
+      --bg-card: #161616;
+      --bg-card-hover: #1a1a1a;
+      --border: #222222;
+      --border-bright: #333333;
+      --text: #e0e0e0;
+      --text-dim: #777777;
+      --text-bright: #ffffff;
+      --accent: #FF4D00;
+      --accent-glow: rgba(255, 77, 0, 0.15);
+      --accent-dim: #cc3d00;
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', -apple-system, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ─── Scanlines overlay ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ─── Nav ─── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    nav .logo {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-bright);
+      letter-spacing: 0.05em;
+      text-decoration: none;
+    }
+
+    nav .logo .accent { color: var(--accent); }
+
+    nav .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    nav .nav-links a {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transition: color 0.2s;
+    }
+
+    nav .nav-links a:hover { color: var(--text-bright); }
+
+    nav .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-bright);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    nav .github-btn:hover {
+      background: var(--bg-card);
+      border-color: var(--text-dim);
+    }
+
+    nav .github-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+    /* ─── Hero ─── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      position: relative;
+    }
+
+    /* grid bg */
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 60px 60px;
+      opacity: 0.3;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent);
+    }
+
+    /* glow */
+    .hero::after {
+      content: '';
+      position: absolute;
+      top: 15%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-content { position: relative; z-index: 1; max-width: 800px; }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 1rem;
+      background: var(--green-dim);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 100px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 2rem;
+    }
+
+    .hero-badge .dot {
+      width: 6px; height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    h1 {
+      font-family: var(--mono);
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 700;
+      color: var(--text-bright);
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.03em;
+    }
+
+    h1 .accent { color: var(--accent); }
+
+    .hero-sub {
+      font-size: 1.25rem;
+      color: var(--text-dim);
+      max-width: 560px;
+      margin: 0 auto 2.5rem;
+      line-height: 1.7;
+    }
+
+    .hero-sub strong { color: var(--text); font-weight: 600; }
+
+    /* Install block */
+    .install-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 3rem;
+    }
+
+    .install-cmd {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-bright);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .install-cmd:hover { border-color: var(--accent); }
+
+    .install-cmd .prompt {
+      padding: 0.9rem 0 0.9rem 1.25rem;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text-dim);
+      user-select: none;
+    }
+
+    .install-cmd code {
+      padding: 0.9rem 1.25rem 0.9rem 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .install-cmd .copy-btn {
+      padding: 0.9rem 1.25rem;
+      background: none;
+      border: none;
+      border-left: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      transition: all 0.2s;
+    }
+
+    .install-cmd .copy-btn:hover { color: var(--text-bright); background: var(--bg-card); }
+
+    .install-note {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+
+    /* ─── Screenshot showcase ─── */
+    .screenshot-wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    .screenshot-frame {
+      border-radius: 12px;
+      border: 1px solid var(--border-bright);
+      overflow: hidden;
+      background: var(--bg-raised);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03),
+        0 20px 60px rgba(0,0,0,0.5),
+        0 0 120px var(--accent-glow);
+    }
+
+    .screenshot-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .screenshot-titlebar .dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+    }
+
+    .screenshot-titlebar .dot:nth-child(1) { background: #ff5f57; }
+    .screenshot-titlebar .dot:nth-child(2) { background: #febc2e; }
+    .screenshot-titlebar .dot:nth-child(3) { background: #28c840; }
+
+    .screenshot-titlebar .url {
+      flex: 1;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .screenshot-frame img {
+      width: 100%;
+      display: block;
+    }
+
+    /* ─── Section common ─── */
+    section {
+      padding: 6rem 2rem;
+    }
+
+    .section-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-family: var(--mono);
+      font-size: clamp(1.5rem, 3vw, 2.2rem);
+      font-weight: 700;
+      color: var(--text-bright);
+      line-height: 1.2;
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-desc {
+      font-size: 1.05rem;
+      color: var(--text-dim);
+      max-width: 600px;
+      line-height: 1.7;
+      margin-bottom: 3rem;
+    }
+
+    /* ─── Features grid ─── */
+    .features-section { background: var(--bg); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      padding: 2rem;
+      transition: background 0.3s;
+    }
+
+    .feature-card:hover { background: var(--bg-card-hover); }
+
+    .feature-icon {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(255, 77, 0, 0.2);
+      border-radius: 10px;
+    }
+
+    .feature-card h3 {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-card p {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* ─── Terminal demo ─── */
+    .terminal-section {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+
+    .terminal-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: center;
+    }
+
+    .terminal-text h2 {
+      font-family: var(--mono);
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 700;
+      color: var(--text-bright);
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .terminal-text p {
+      font-size: 1rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+      margin-bottom: 1.5rem;
+    }
+
+    .terminal-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .terminal-features li {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .terminal-features li::before {
+      content: '>';
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .terminal-img-wrap {
+      border-radius: 12px;
+      border: 1px solid var(--border-bright);
+      overflow: hidden;
+      background: var(--bg-raised);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .terminal-img-wrap img {
+      width: 100%;
+      display: block;
+    }
+
+    /* ─── How it works ─── */
+    .how-section { border-top: 1px solid var(--border); }
+
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      position: relative;
+    }
+
+    .pipeline::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0; right: 0;
+      height: 1px;
+      background: var(--border-bright);
+      z-index: 0;
+    }
+
+    .pipeline-step {
+      flex: 1;
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 1.5rem 1rem;
+    }
+
+    .pipeline-dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .pipeline-step h4 {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 0.4rem;
+    }
+
+    .pipeline-step p {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* ─── Comparison table ─── */
+    .compare-section {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+
+    .compare-table thead th {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 2px solid var(--border-bright);
+      color: var(--text-dim);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.7rem;
+    }
+
+    .compare-table thead th:first-child { color: var(--text); }
+    .compare-table thead th:nth-child(2) { color: var(--accent); }
+
+    .compare-table tbody td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .compare-table tbody td:first-child {
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .compare-table tbody tr:hover td { background: var(--bg-card); }
+
+    .check { color: var(--green); }
+    .cross { color: var(--text-dim); opacity: 0.4; }
+
+    /* ─── Keyboard shortcuts section ─── */
+    .keys-section { border-top: 1px solid var(--border); }
+
+    .keys-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .key-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .key-item kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 6px;
+      background: var(--bg);
+      border: 1px solid var(--border-bright);
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent);
+      box-shadow: 0 2px 0 var(--border);
+    }
+
+    .key-item span {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    /* ─── CTA ─── */
+    .cta-section {
+      text-align: center;
+      border-top: 1px solid var(--border);
+      position: relative;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 300px;
+      background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-section .section-inner { position: relative; z-index: 1; }
+
+    .cta-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      background: var(--bg-raised);
+      border: 2px solid var(--accent);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 2rem 0;
+      box-shadow: 0 0 40px var(--accent-glow);
+    }
+
+    .cta-install .prompt {
+      padding: 1rem 0 1rem 1.5rem;
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      color: var(--text-dim);
+      user-select: none;
+    }
+
+    .cta-install code {
+      padding: 1rem 1.5rem 1rem 0.5rem;
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    footer p {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    footer a {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    footer a:hover { color: var(--accent); }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .terminal-layout { grid-template-columns: 1fr; }
+      .pipeline { flex-direction: column; }
+      .pipeline::before {
+        top: 0; bottom: 0;
+        left: 50%;
+        width: 1px;
+        height: 100%;
+      }
+      nav .nav-links a:not(.github-btn) { display: none; }
+    }
+
+    @media (max-width: 600px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .compare-table { font-size: 0.65rem; }
+      .compare-table td, .compare-table th { padding: 0.5rem; }
+    }
+
+    /* ─── Animations ─── */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <a href="#" class="logo"><span class="accent">agent</span>kitchen</a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#terminal">Terminal</a>
+    <a href="#compare">Compare</a>
+    <a href="https://github.com/vivekhaldar/agent-kitchen" class="github-btn" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      Star
+    </a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Open Source &middot; Apache 2.0
+    </div>
+
+    <h1>Make sense of<br><span class="accent">all your agents</span></h1>
+
+    <p class="hero-sub">
+      You run dozens of AI sessions a day across repos, branches, and tools. Where did that fix land? What's still in progress? Agent Kitchen reads your <strong>Claude Code</strong> and <strong>Codex CLI</strong> sessions, summarizes them, and gives you the full picture &mdash; <strong>one command, zero config</strong>.
+    </p>
+
+    <div class="install-block">
+      <div class="install-cmd">
+        <span class="prompt">$</span>
+        <code>uvx agent-kitchen web</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('uvx agent-kitchen web');this.textContent='copied!';setTimeout(()=>this.textContent='copy',1500)">copy</button>
+      </div>
+      <span class="install-note">Requires Python 3.12+ &middot; No install needed &middot; Runs locally</span>
+    </div>
+  </div>
+
+  <div class="screenshot-wrap fade-up">
+    <div class="screenshot-frame">
+      <div class="screenshot-titlebar">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <span class="url">localhost:8099</span>
+      </div>
+      <img src="screenshot.jpg" alt="Agent Kitchen dashboard showing grouped sessions with git status, AI summaries, and timelines" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features-section" id="features">
+  <div class="section-inner">
+    <span class="section-label">// features</span>
+    <h2 class="section-title">Everything you need.<br>Nothing you don't.</h2>
+    <p class="section-desc">No signup. No cloud. No workflow changes. It reads the session files already on your machine and gives you a bird's-eye view.</p>
+
+    <div class="features-grid fade-up">
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F50D;</div>
+        <h3>Unified view</h3>
+        <p>Claude Code and Codex CLI sessions in one place, grouped by git repo, sorted by recency.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F916;</div>
+        <h3>AI summaries</h3>
+        <p>Each session gets a one-line summary via Claude Haiku. Instantly know what each session did without reading logs.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4CA;</div>
+        <h3>Live git status</h3>
+        <p>Current branch, dirty files, unpushed commits. See the state of every repo at a glance.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x23F0;</div>
+        <h3>Repo timelines</h3>
+        <p>AI-generated narrative of how work evolved across sessions. "Yesterday: fixed auth bug. Mar 14: implemented retry logic."</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F4BB;</div>
+        <h3>Resume in browser</h3>
+        <p>Full terminal emulator in the browser via xterm.js. Click a session and pick up exactly where you left off.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x26A1;</div>
+        <h3>Instant startup</h3>
+        <p>Cached summaries load instantly. LLM summaries generate in the background. The dashboard never blocks.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x2328;&#xFE0F;</div>
+        <h3>Keyboard-first</h3>
+        <p>Vim-style j/k navigation, fuzzy search with /, expand with Enter. Feels like home.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F504;</div>
+        <h3>Smart filtering</h3>
+        <p>Time range slider, fuzzy search across all sessions. Filters out SDK noise and subagent sessions automatically.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x2795;</div>
+        <h3>Launch new sessions</h3>
+        <p>Start new Claude sessions in any repo directly from the dashboard. One click, zero friction.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Terminal section -->
+<section class="terminal-section" id="terminal">
+  <div class="section-inner">
+    <div class="terminal-layout fade-up">
+      <div class="terminal-text">
+        <span class="section-label">// in-browser terminal</span>
+        <h2>Resume any session.<br>Right here.</h2>
+        <p>Click any session row and a full terminal slides up from the bottom. Multi-tab support. Real PTY. Runs your actual shell with full Claude Code context.</p>
+        <ul class="terminal-features">
+          <li>xterm.js terminal with WebSocket PTY</li>
+          <li>Multiple tabs for parallel sessions</li>
+          <li>JetBrains Mono, dark theme, orange cursor</li>
+          <li>Or open in Ghostty / Terminal.app</li>
+        </ul>
+      </div>
+      <div class="terminal-img-wrap">
+        <img src="ak-shell.jpg" alt="Agent Kitchen in-browser terminal showing a Claude Code session with code editing and test output" loading="lazy">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="how-section">
+  <div class="section-inner">
+    <span class="section-label">// architecture</span>
+    <h2 class="section-title">A simple pipeline</h2>
+    <p class="section-desc">No database. No cloud. Just reads files from your filesystem and serves a local dashboard.</p>
+
+    <div class="pipeline fade-up">
+      <div class="pipeline-step">
+        <div class="pipeline-dot">1</div>
+        <h4>Scan</h4>
+        <p>Reads JSONL session files from ~/.claude and ~/.codex</p>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-dot">2</div>
+        <h4>Annotate</h4>
+        <p>Adds live git status per repo (branch, dirty, unpushed)</p>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-dot">3</div>
+        <h4>Summarize</h4>
+        <p>Claude Haiku generates one-line summaries + status labels</p>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-dot">4</div>
+        <h4>Group</h4>
+        <p>Sessions grouped by repo, sorted by most recent activity</p>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-dot">5</div>
+        <h4>Serve</h4>
+        <p>FastAPI serves JSON API + static frontend at localhost</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Keyboard shortcuts -->
+<section class="keys-section">
+  <div class="section-inner">
+    <span class="section-label">// keyboard shortcuts</span>
+    <h2 class="section-title">For the keyboard-obsessed</h2>
+    <p class="section-desc">Everything is reachable without touching the mouse.</p>
+
+    <div class="keys-grid fade-up">
+      <div class="key-item"><kbd>/</kbd> <span>Fuzzy search</span></div>
+      <div class="key-item"><kbd>j</kbd> <span>Next group</span></div>
+      <div class="key-item"><kbd>k</kbd> <span>Prev group</span></div>
+      <div class="key-item"><kbd>Enter</kbd> <span>Expand group</span></div>
+      <div class="key-item"><kbd>r</kbd> <span>Refresh</span></div>
+      <div class="key-item"><kbd>?</kbd> <span>Help</span></div>
+      <div class="key-item"><kbd>Esc</kbd> <span>Close terminal</span></div>
+      <div class="key-item"><kbd>t</kbd> <span>Focus terminal</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Comparison -->
+<section class="compare-section" id="compare">
+  <div class="section-inner">
+    <span class="section-label">// comparison</span>
+    <h2 class="section-title">Built different</h2>
+    <p class="section-desc">Most tools in this space are orchestrators. Agent Kitchen is the only one built for developers who use Claude as an everything-agent.</p>
+
+    <div class="fade-up" style="overflow-x:auto">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Agent Kitchen</th>
+            <th>Conductor</th>
+            <th>Sculptor</th>
+            <th>Claude Squad</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Non-repo sessions</td>
+            <td class="check">&#10003; First-class</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+          </tr>
+          <tr>
+            <td>LLM session summaries</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+          </tr>
+          <tr>
+            <td>Zero workflow change</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+          </tr>
+          <tr>
+            <td>Resume in browser</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+            <td class="cross">&#10007;</td>
+          </tr>
+          <tr>
+            <td>Repo timeline</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10007;</td>
+            <td>Replay</td>
+            <td class="cross">&#10007;</td>
+          </tr>
+          <tr>
+            <td>Setup</td>
+            <td class="check">One command</td>
+            <td>App download</td>
+            <td>App download</td>
+            <td>Homebrew + tmux</td>
+          </tr>
+          <tr>
+            <td>Open source</td>
+            <td class="check">Apache 2.0</td>
+            <td class="cross">&#10007;</td>
+            <td class="check">&#10003;</td>
+            <td class="check">&#10003;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-inner">
+    <span class="section-label">// get started</span>
+    <h2 class="section-title">Try it in 10 seconds</h2>
+    <p class="section-desc" style="margin-left:auto;margin-right:auto">If you use Claude Code or Codex CLI, you already have session data. Agent Kitchen just makes it visible.</p>
+
+    <div class="cta-install">
+      <span class="prompt">$</span>
+      <code>uvx agent-kitchen web</code>
+    </div>
+
+    <p style="margin-top:1.5rem">
+      <a href="https://github.com/vivekhaldar/agent-kitchen" style="color:var(--accent);text-decoration:none;font-family:var(--mono);font-size:0.85rem" target="_blank" rel="noopener">
+        github.com/vivekhaldar/agent-kitchen &rarr;
+      </a>
+    </p>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>
+    Built by <a href="https://vivekhaldar.com" target="_blank" rel="noopener">Vivek Haldar</a> &middot;
+    <a href="https://github.com/vivekhaldar/agent-kitchen" target="_blank" rel="noopener">GitHub</a> &middot;
+    Apache 2.0
+  </p>
+</footer>
+
+<script>
+  // Intersection Observer for fade-up animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
