@@ -1,0 +1,1 @@
+bug -- even though time slider is narrowed to 2d the daily summaries are showing many more days --
