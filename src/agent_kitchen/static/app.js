@@ -190,11 +190,17 @@
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
-    // Render timeline if present
+    // Render timeline if present, filtered by time slider
     if (opts.timeline && opts.timeline.length > 0) {
       var timelineEl = document.createElement("div");
       timelineEl.className = "repo-timeline";
+      var cutoff = timeFilterDays === Infinity ? 0 : Date.now() - timeFilterDays * 24 * 60 * 60 * 1000;
       opts.timeline.forEach(function (phase) {
+        // Filter out phases older than the time slider cutoff
+        if (cutoff > 0 && phase.start_date) {
+          var phaseDate = new Date(phase.start_date + "T00:00:00").getTime();
+          if (phaseDate < cutoff) return;
+        }
         var phaseEl = document.createElement("div");
         phaseEl.className = "timeline-phase";
         phaseEl.innerHTML =
@@ -202,7 +208,9 @@
           '<span class="timeline-desc">' + escapeHtml(phase.description) + '</span>';
         timelineEl.appendChild(phaseEl);
       });
-      sessionList.appendChild(timelineEl);
+      if (timelineEl.children.length > 0) {
+        sessionList.appendChild(timelineEl);
+      }
     }
 
     var showingAll = filteredSessions.length <= INITIAL_VISIBLE;

@@ -33,6 +33,7 @@ class TimelinePhase:
     description: str  # max 80 chars
     session_count: int
     status: str  # "done", "in progress", "mixed"
+    start_date: str | None = None  # ISO date (YYYY-MM-DD) for client-side filtering
 
 
 @dataclass
