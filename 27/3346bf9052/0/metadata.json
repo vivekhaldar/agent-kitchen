@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "273346bf9052",
+  "session_id": "527e6991-21da-4072-bf11-ef56dddcd939",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-19T02:42:02.26287Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/site/index.html",
+    "docs/site/screenshot.jpg",
+    "docs/index.html",
+    "docs/site/ak-shell.jpg"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "32857cc143bb",
+  "checkpoint_transcript_start": 196,
+  "transcript_lines_at_start": 196,
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 948,
+    "cache_read_tokens": 221569,
+    "output_tokens": 465,
+    "api_call_count": 4
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-19T02:42:02.126479Z",
+    "agent_lines": 1027,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1027,
+    "agent_percentage": 100
+  }
+}

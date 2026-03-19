@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "273346bf9052",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/index.html",
+    "docs/site/ak-shell.jpg",
+    "docs/site/index.html",
+    "docs/site/screenshot.jpg"
+  ],
+  "sessions": [
+    {
+      "metadata": "/27/3346bf9052/0/metadata.json",
+      "transcript": "/27/3346bf9052/0/full.jsonl",
+      "content_hash": "/27/3346bf9052/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 948,
+    "cache_read_tokens": 221569,
+    "output_tokens": 465,
+    "api_call_count": 4
+  }
+}
