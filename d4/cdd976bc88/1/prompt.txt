@@ -1,0 +1,5 @@
+do you see the issue?
+
+---
+
+but now when i expand slider to "all time" i only see very few summaries:
