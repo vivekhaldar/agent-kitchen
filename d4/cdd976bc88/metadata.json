@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "d4cdd976bc88",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/agent_kitchen/server.py",
+    "src/agent_kitchen/static/app.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d4/cdd976bc88/0/metadata.json",
+      "transcript": "/d4/cdd976bc88/0/full.jsonl",
+      "content_hash": "/d4/cdd976bc88/0/content_hash.txt",
+      "prompt": "/d4/cdd976bc88/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1715,
+    "cache_creation_tokens": 85681,
+    "cache_read_tokens": 816954,
+    "output_tokens": 6676,
+    "api_call_count": 20
+  }
+}

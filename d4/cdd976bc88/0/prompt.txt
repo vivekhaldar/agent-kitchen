@@ -1,0 +1,7 @@
+the terminal is almost always rendered with garbled text and layout -- 
+
+investigate why that is happening and what might fix it
+
+---
+
+did all the tests pass?
