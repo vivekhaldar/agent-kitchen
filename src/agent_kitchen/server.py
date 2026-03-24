@@ -433,8 +433,11 @@ def create_app(
         await ws.accept()
         logger.info("Terminal WS accepted: source=%s session=%s cwd=%s", source, session_id, cwd)
 
+        cols = int(ws.query_params.get("cols", 120))
+        rows = int(ws.query_params.get("rows", 30))
+
         try:
-            tid, pty = _spawn_pty(source, session_id, cwd)
+            tid, pty = _spawn_pty(source, session_id, cwd, cols=cols, rows=rows)
         except Exception:
             logger.exception("Failed to spawn PTY")
             await ws.close(code=1011, reason="PTY spawn failed")

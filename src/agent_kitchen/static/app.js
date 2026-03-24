@@ -431,6 +431,15 @@
   var $terminalTabs = document.getElementById("terminal-tabs");
   var $terminalClose = document.getElementById("terminal-close");
 
+  // Re-fit active terminal on any container size change (panel open/close,
+  // tab switch, browser resize, etc.)
+  var terminalResizeObserver = new ResizeObserver(function () {
+    if (activeTabId && terminals[activeTabId]) {
+      terminals[activeTabId].fitAddon.fit();
+    }
+  });
+  terminalResizeObserver.observe($terminalContainer);
+
   function generateTabId() {
     return "tab-" + (tabIdCounter++);
   }
@@ -538,37 +547,53 @@
     }
     activeTabId = tabId;
     container.classList.add("active");
-    fitAddon.fit();
 
-    var params = new URLSearchParams(wsParams);
-    var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-    var wsUrl = wsProtocol + "//" + location.host + "/ws/terminal?" + params.toString();
-    var ws = new WebSocket(wsUrl);
-    tabData.ws = ws;
+    // Defer fit + WebSocket connection until container is fully laid out.
+    // Double-rAF ensures the browser has completed layout after display change.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        fitAddon.fit();
 
-    ws.onopen = function () {
-      ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-      term.focus();
-    };
+        // Pass terminal dimensions as query params so the PTY spawns at the
+        // correct size from the start (avoids garbled initial render).
+        var params = new URLSearchParams(wsParams);
+        params.set("cols", term.cols);
+        params.set("rows", term.rows);
+        var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+        var wsUrl =
+          wsProtocol + "//" + location.host + "/ws/terminal?" + params.toString();
+        var ws = new WebSocket(wsUrl);
+        tabData.ws = ws;
 
-    ws.onmessage = function (evt) {
-      term.write(evt.data);
-    };
+        ws.onopen = function () {
+          ws.send(
+            JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })
+          );
+          term.focus();
+        };
 
-    ws.onclose = function () {
-      term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
-      tabData.ended = true;
-      renderTabs();
-    };
+        ws.onmessage = function (evt) {
+          term.write(evt.data);
+        };
 
-    term.onData(function (data) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(data);
-    });
+        ws.onclose = function () {
+          term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+          tabData.ended = true;
+          renderTabs();
+        };
 
-    term.onResize(function (size) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "resize", cols: size.cols, rows: size.rows }));
-      }
+        term.onData(function (data) {
+          if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        });
+
+        term.onResize(function (size) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({ type: "resize", cols: size.cols, rows: size.rows })
+            );
+          }
+        });
+      });
     });
 
     if (!resizeListenerAttached) {
