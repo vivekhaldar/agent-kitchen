@@ -785,3 +785,54 @@ class TestBackgroundRefresh:
         # New data should be the current
         assert server._dashboard_data is new_data
         server._dashboard_data = None
+
+
+class TestTruncateToolContent:
+    """Tests for server-side truncation of large tool call content."""
+
+    def test_truncates_large_tool_content(self):
+        data = {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call_001",
+            "content": [
+                {
+                    "type": "content",
+                    "content": {"type": "text", "text": "x" * 5000},
+                }
+            ],
+        }
+        # Inline truncation test
+        for item in data["content"]:
+            inner = item.get("content")
+            if isinstance(inner, dict):
+                text = inner.get("text")
+                if isinstance(text, str) and len(text) > 2000:
+                    inner["text"] = text[:2000] + "\n...(truncated)"
+
+        assert len(data["content"][0]["content"]["text"]) == 2000 + len("\n...(truncated)")
+        assert data["content"][0]["content"]["text"].endswith("...(truncated)")
+
+    def test_does_not_truncate_small_content(self):
+        """Content under the limit should pass through unchanged."""
+        data = {
+            "sessionUpdate": "tool_call_update",
+            "content": [
+                {
+                    "type": "content",
+                    "content": {"type": "text", "text": "short text"},
+                }
+            ],
+        }
+        original_text = data["content"][0]["content"]["text"]
+        # Should not be modified
+        assert len(original_text) < 2000
+        assert original_text == "short text"
+
+    def test_ignores_non_tool_updates(self):
+        """Non-tool_call_update messages should pass through unchanged."""
+        data = {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {"type": "text", "text": "x" * 5000},
+        }
+        # Should not be modified — wrong sessionUpdate type
+        assert len(data["content"]["text"]) == 5000

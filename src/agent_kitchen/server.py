@@ -490,6 +490,29 @@ def create_app(
             _terminals.pop(tid, None)
             logger.info("Terminal cleanup done for tid=%s", tid)
 
+    _TOOL_CONTENT_MAX = 2000
+
+    def _truncate_tool_content(data: dict) -> None:
+        """Truncate large text payloads in tool_call_update messages.
+
+        Agents can return entire file contents in tool results. The frontend
+        only shows a preview, so we cap text here to avoid sending megabytes
+        over the WebSocket.
+        """
+        if data.get("sessionUpdate") != "tool_call_update":
+            return
+        content = data.get("content")
+        if not isinstance(content, list):
+            return
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            inner = item.get("content")
+            if isinstance(inner, dict):
+                text = inner.get("text")
+                if isinstance(text, str) and len(text) > _TOOL_CONTENT_MAX:
+                    inner["text"] = text[:_TOOL_CONTENT_MAX] + "\n...(truncated)"
+
     @app.websocket("/ws/chat")
     async def chat_ws(ws: WebSocket):
         await ws.accept()
@@ -533,6 +556,7 @@ def create_app(
                 else:
                     data = {"raw": str(update)}
                 data["type"] = "update"
+                _truncate_tool_content(data)
                 await ws.send_json(data)
             except Exception:
                 logger.debug("Failed to forward update", exc_info=True)
