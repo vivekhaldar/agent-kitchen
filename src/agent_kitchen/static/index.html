@@ -41,9 +41,11 @@
   </header>
 
   <div class="filter-bar" id="filter-bar">
-    <div class="time-slider-row">
-      <span class="time-slider-label" id="time-slider-label">All time</span>
-      <input type="range" id="time-slider" class="time-slider" min="1" max="60" value="60">
+    <div class="time-segments" id="time-segments">
+      <button class="time-seg" data-days="1">24h</button>
+      <button class="time-seg" data-days="7">7d</button>
+      <button class="time-seg" data-days="30">30d</button>
+      <button class="time-seg active" data-days="0">All</button>
     </div>
   </div>
 

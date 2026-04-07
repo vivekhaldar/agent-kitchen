@@ -19,8 +19,7 @@
   const $lastScan = document.getElementById("last-scan");
   const $btnRefresh = document.getElementById("btn-refresh");
   const $scanDays = document.getElementById("scan-days");
-  const $timeSlider = document.getElementById("time-slider");
-  const $timeSliderLabel = document.getElementById("time-slider-label");
+  const $timeSegments = document.getElementById("time-segments");
   const $searchOverlay = document.getElementById("search-overlay");
   const $searchInput = document.getElementById("search-input");
   const $searchResults = document.getElementById("search-results");
@@ -390,7 +389,6 @@
       .then(function (data) {
         dashboardData = data;
         lastScannedTime = data.last_scanned;
-        updateSliderRange();
         render();
         updateLastScan();
       })
@@ -408,7 +406,6 @@
       .then(function (data) {
         dashboardData = data;
         lastScannedTime = data.last_scanned;
-        updateSliderRange();
         render();
         updateLastScan();
       })
@@ -662,49 +659,18 @@
     }
   }
 
-  // --- Time Slider ---
+  // --- Time Segment Buttons ---
 
-  function computeMaxDays() {
-    if (!dashboardData) return 60;
-    var oldest = Infinity;
-    var all = allSessions();
-    all.forEach(function (entry) {
-      if (entry.session.last_active) {
-        var t = new Date(entry.session.last_active).getTime();
-        if (t < oldest) oldest = t;
-      }
+  $timeSegments.addEventListener("click", function (e) {
+    var btn = e.target.closest(".time-seg");
+    if (!btn) return;
+    var days = parseInt(btn.getAttribute("data-days"), 10);
+    timeFilterDays = days === 0 ? Infinity : days;
+
+    $timeSegments.querySelectorAll(".time-seg").forEach(function (b) {
+      b.classList.remove("active");
     });
-    if (oldest === Infinity) return 60;
-    return Math.max(1, Math.ceil((Date.now() - oldest) / (24 * 60 * 60 * 1000)));
-  }
-
-  function updateSliderRange() {
-    var maxDays = computeMaxDays();
-    $timeSlider.max = maxDays;
-    $timeSlider.value = maxDays;
-    timeFilterDays = Infinity;
-    updateSliderLabel(maxDays, maxDays);
-  }
-
-  function updateSliderLabel(val, max) {
-    if (val >= max) {
-      $timeSliderLabel.textContent = "All time";
-    } else if (val === 1) {
-      $timeSliderLabel.textContent = "Last 24h";
-    } else {
-      $timeSliderLabel.textContent = "Last " + val + "d";
-    }
-  }
-
-  $timeSlider.addEventListener("input", function () {
-    var val = parseInt($timeSlider.value, 10);
-    var max = parseInt($timeSlider.max, 10);
-    if (val >= max) {
-      timeFilterDays = Infinity;
-    } else {
-      timeFilterDays = val;
-    }
-    updateSliderLabel(val, max);
+    btn.classList.add("active");
     render();
   });
 

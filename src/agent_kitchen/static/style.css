@@ -189,7 +189,7 @@ body {
   pointer-events: none;
 }
 
-/* ===== Filter Bar (Time Slider) ===== */
+/* ===== Filter Bar (Time Segments) ===== */
 
 .filter-bar {
   padding: 10px 32px;
@@ -197,56 +197,39 @@ body {
   margin: 0 auto;
 }
 
-.time-slider-row {
+.time-segments {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: fit-content;
 }
 
-.time-slider-label {
+.time-seg {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
-  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  white-space: nowrap;
-  min-width: 80px;
-}
-
-.time-slider {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  background: var(--border);
-  outline: none;
-  border-radius: 2px;
-  max-width: 300px;
-}
-
-.time-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--text-primary);
-  cursor: pointer;
-  transition: background var(--transition);
-}
-
-.time-slider::-webkit-slider-thumb:hover {
-  background: var(--accent);
-}
-
-.time-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--text-primary);
-  cursor: pointer;
+  padding: 4px 12px;
   border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.time-seg:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.time-seg:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.time-seg.active {
+  background: var(--text-primary);
+  color: var(--bg-secondary);
 }
 
 /* ===== Search Overlay ===== */
