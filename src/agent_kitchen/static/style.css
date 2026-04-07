@@ -1642,6 +1642,10 @@ body.chat-open .content {
   .time-ago {
     display: none;
   }
+
+  .chat-bubble.assistant {
+    max-width: 90%;
+  }
 }
 
 /* ===== Dark Mode ===== */
@@ -1696,6 +1700,21 @@ body.chat-open .content {
   }
 
   .source-badge {
+    border-color: var(--border);
+  }
+
+  .time-seg.active {
+    background: var(--text-primary);
+    color: var(--bg-secondary);
+  }
+
+  .search-hint-bar {
+    background: var(--bg-surface);
+    border-color: var(--border);
+  }
+
+  .search-hint-bar kbd {
+    background: var(--bg-primary);
     border-color: var(--border);
   }
 }
