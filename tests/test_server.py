@@ -836,3 +836,78 @@ class TestTruncateToolContent:
         }
         # Should not be modified — wrong sessionUpdate type
         assert len(data["content"]["text"]) == 5000
+
+
+# --- build_content_blocks ---
+
+
+class TestBuildContentBlocks:
+    """Tests for building ACP content blocks from WebSocket messages."""
+
+    def test_text_only(self):
+        from agent_kitchen.server import build_content_blocks
+
+        blocks = build_content_blocks({"text": "hello world"})
+        assert len(blocks) == 1
+        assert blocks[0].type == "text"
+        assert blocks[0].text == "hello world"
+
+    def test_image_only(self):
+        from agent_kitchen.server import build_content_blocks
+
+        blocks = build_content_blocks(
+            {
+                "text": "",
+                "images": [{"data": "iVBORw0KGgo=", "mimeType": "image/png"}],
+            }
+        )
+        assert len(blocks) == 1
+        assert blocks[0].type == "image"
+        assert blocks[0].data == "iVBORw0KGgo="
+        assert blocks[0].mime_type == "image/png"
+
+    def test_text_and_images(self):
+        from agent_kitchen.server import build_content_blocks
+
+        blocks = build_content_blocks(
+            {
+                "text": "describe these",
+                "images": [
+                    {"data": "abc123", "mimeType": "image/png"},
+                    {"data": "def456", "mimeType": "image/jpeg"},
+                ],
+            }
+        )
+        assert len(blocks) == 3
+        assert blocks[0].type == "text"
+        assert blocks[0].text == "describe these"
+        assert blocks[1].type == "image"
+        assert blocks[1].data == "abc123"
+        assert blocks[2].type == "image"
+        assert blocks[2].mime_type == "image/jpeg"
+
+    def test_empty_message(self):
+        from agent_kitchen.server import build_content_blocks
+
+        assert build_content_blocks({}) == []
+        assert build_content_blocks({"text": ""}) == []
+        assert build_content_blocks({"text": "  ", "images": []}) == []
+
+    def test_whitespace_stripped_from_text(self):
+        from agent_kitchen.server import build_content_blocks
+
+        blocks = build_content_blocks({"text": "  hello  "})
+        assert blocks[0].text == "hello"
+
+    def test_text_block_comes_before_images(self):
+        """Text should always be the first block, followed by images."""
+        from agent_kitchen.server import build_content_blocks
+
+        blocks = build_content_blocks(
+            {
+                "text": "what is this?",
+                "images": [{"data": "img1", "mimeType": "image/png"}],
+            }
+        )
+        assert blocks[0].type == "text"
+        assert blocks[1].type == "image"

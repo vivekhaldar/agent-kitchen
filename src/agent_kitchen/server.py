@@ -86,6 +86,21 @@ def _spawn_pty(
     return tid, pty
 
 
+def build_content_blocks(msg: dict) -> list:
+    """Build ACP content blocks from a WebSocket user_message payload.
+
+    Returns a list of text/image blocks, or an empty list if there's no content.
+    """
+    text = msg.get("text", "").strip()
+    images = msg.get("images", [])
+    blocks: list = []
+    if text:
+        blocks.append(acp.text_block(text))
+    for img in images:
+        blocks.append(acp.image_block(img["data"], img["mimeType"]))
+    return blocks
+
+
 def _serialize_dashboard(data: dict) -> dict:
     """Convert dashboard data with dataclass objects to JSON-serializable dicts."""
 
@@ -628,16 +643,9 @@ def create_app(
                 msg_type = msg.get("type", "")
 
                 if msg_type == "user_message":
-                    text = msg.get("text", "").strip()
-                    images = msg.get("images", [])
-                    if not text and not images:
+                    content_blocks = build_content_blocks(msg)
+                    if not content_blocks:
                         continue
-                    # Build ACP content blocks from text and images
-                    content_blocks = []
-                    if text:
-                        content_blocks.append(acp.text_block(text))
-                    for img in images:
-                        content_blocks.append(acp.image_block(img["data"], img["mimeType"]))
                     try:
                         # prompt() auto-restarts if the agent process died
                         was_dead = not bridge.is_alive
