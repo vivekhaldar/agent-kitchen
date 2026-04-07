@@ -94,6 +94,7 @@
     activeChatTabId = tabId;
     chatTabs[tabId].container.classList.add("active");
     renderChatTabs();
+    renderTurnSidebar(chatTabs[tabId]);
     scrollToBottom();
     $chatInput.focus();
   }
@@ -144,6 +145,8 @@
       thinkingEl: null,
       renderScheduled: false,
       sessionSummary: sessionSummary || null,
+      userTurns: [],
+      activeTurnIndex: -1,
     };
     chatTabs[tabId] = tabData;
 
@@ -299,10 +302,15 @@
     // Close any open agent message
     finalizeAssistantMessage(tabData);
 
+    var turnIndex = tabData.userTurns.length;
     var bubble = document.createElement("div");
     bubble.className = "chat-bubble user";
+    bubble.setAttribute("data-turn-index", turnIndex);
     bubble.textContent = text;
     tabData.container.appendChild(bubble);
+
+    tabData.userTurns.push({ index: turnIndex, element: bubble, text: text });
+    renderTurnSidebar(tabData);
     scrollToBottom();
   }
 
@@ -509,6 +517,87 @@
     }
   }
 
+  // --- Turn Navigation Sidebar ---
+
+  var $turnSidebar = document.getElementById("chat-turn-sidebar");
+
+  function renderTurnSidebar(tabData) {
+    if (!$turnSidebar) return;
+    var turns = tabData.userTurns;
+    if (turns.length === 0) {
+      $turnSidebar.classList.add("hidden");
+      return;
+    }
+
+    $turnSidebar.classList.remove("hidden");
+    var list = $turnSidebar.querySelector(".turn-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    turns.forEach(function (turn) {
+      var item = document.createElement("div");
+      item.className = "turn-item" + (turn.index === tabData.activeTurnIndex ? " active" : "");
+      item.setAttribute("data-turn-index", turn.index);
+
+      var label = document.createElement("span");
+      label.className = "turn-label";
+      label.textContent = (turn.index + 1);
+
+      var preview = document.createElement("span");
+      preview.className = "turn-preview";
+      var previewText = turn.text.length > 60 ? turn.text.substring(0, 60) + "..." : turn.text;
+      preview.textContent = previewText;
+
+      item.appendChild(label);
+      item.appendChild(preview);
+      item.addEventListener("click", function () {
+        jumpToTurn(tabData, turn.index);
+      });
+      list.appendChild(item);
+    });
+
+    // Update counter
+    var counter = $turnSidebar.querySelector(".turn-counter");
+    if (counter) {
+      var current = tabData.activeTurnIndex >= 0 ? (tabData.activeTurnIndex + 1) : "-";
+      counter.textContent = current + " / " + turns.length;
+    }
+  }
+
+  function jumpToTurn(tabData, turnIndex) {
+    var turns = tabData.userTurns;
+    if (turnIndex < 0 || turnIndex >= turns.length) return;
+
+    tabData.activeTurnIndex = turnIndex;
+    var el = turns[turnIndex].element;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // Brief highlight flash
+    el.classList.add("turn-highlight");
+    setTimeout(function () { el.classList.remove("turn-highlight"); }, 1500);
+
+    renderTurnSidebar(tabData);
+  }
+
+  function jumpToPreviousTurn(tabData) {
+    if (!tabData || tabData.userTurns.length === 0) return;
+    var next = tabData.activeTurnIndex <= 0 ? 0 : tabData.activeTurnIndex - 1;
+    jumpToTurn(tabData, next);
+  }
+
+  function jumpToNextTurn(tabData) {
+    if (!tabData || tabData.userTurns.length === 0) return;
+    var max = tabData.userTurns.length - 1;
+    var next = tabData.activeTurnIndex >= max ? max : tabData.activeTurnIndex + 1;
+    jumpToTurn(tabData, next);
+  }
+
+  // Toggle sidebar visibility
+  function toggleTurnSidebar() {
+    if (!$turnSidebar) return;
+    $turnSidebar.classList.toggle("collapsed");
+  }
+
   // --- Rendering: System / Info / Auth ---
 
   function appendSystemMessage(tabData, text) {
@@ -602,6 +691,24 @@
 
   $chatSend.addEventListener("click", sendUserMessage);
 
+  // Turn navigation keyboard shortcuts (Ctrl+Up/Down)
+  document.addEventListener("keydown", function (e) {
+    if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
+    var tab = chatTabs[activeChatTabId];
+    if (!$chatPanel || $chatPanel.classList.contains("hidden")) return;
+
+    if (e.ctrlKey && e.key === "ArrowUp") {
+      e.preventDefault();
+      jumpToPreviousTurn(tab);
+    } else if (e.ctrlKey && e.key === "ArrowDown") {
+      e.preventDefault();
+      jumpToNextTurn(tab);
+    } else if (e.ctrlKey && e.key === "t") {
+      e.preventDefault();
+      toggleTurnSidebar();
+    }
+  });
+
   $chatClose.addEventListener("click", function () {
     // Close all tabs
     Object.keys(chatTabs).forEach(function (tabId) {
@@ -612,6 +719,7 @@
     chatTabs = {};
     activeChatTabId = null;
     $chatPanel.classList.add("hidden");
+    if ($turnSidebar) $turnSidebar.classList.add("hidden");
     document.body.classList.remove("chat-open");
     renderChatTabs();
   });

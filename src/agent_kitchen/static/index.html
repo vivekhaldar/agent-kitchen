@@ -118,7 +118,17 @@
 <button class="chat-panel-close" id="chat-close" aria-label="Close chat panel">&times;</button>
       </div>
     </div>
-    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-body">
+      <div class="chat-turn-sidebar hidden" id="chat-turn-sidebar">
+        <div class="turn-sidebar-header">
+          <span class="turn-sidebar-title">Turns</span>
+          <span class="turn-counter">-</span>
+        </div>
+        <div class="turn-list"></div>
+        <div class="turn-shortcuts">Ctrl+&uarr;/&darr; navigate &middot; Ctrl+T toggle</div>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+    </div>
     <div class="chat-input-bar">
       <textarea id="chat-input" class="chat-input" placeholder="Send a message..." rows="1"></textarea>
       <button id="chat-send" class="chat-send-btn" aria-label="Send message">&uarr;</button>
