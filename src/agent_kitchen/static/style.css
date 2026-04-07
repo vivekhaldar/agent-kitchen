@@ -51,6 +51,15 @@
   --font-display: "Archivo Black", "Arial Black", sans-serif;
   --font-body: "Archivo", "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", monospace;
+
+  /* Type scale */
+  --font-size-xs: 9px;
+  --font-size-sm: 11px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
 }
 
 * {
@@ -82,7 +91,7 @@ body {
 
 .header-title {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 400; /* Archivo Black is already black weight */
   letter-spacing: 0.04em;
   color: var(--text-primary);
@@ -96,7 +105,7 @@ body {
 
 .last-scan {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.02em;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -114,7 +123,7 @@ body {
 
 .scan-days-input {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 500;
   width: 40px;
   padding: 5px 2px 5px 10px;
@@ -137,7 +146,7 @@ body {
 
 .scan-days-suffix {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -154,7 +163,7 @@ body {
   color: var(--bg-secondary);
   font-family: var(--font-body);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
