@@ -95,6 +95,7 @@
     chatTabs[tabId].container.classList.add("active");
     renderChatTabs();
     renderTurnSidebar(chatTabs[tabId]);
+    updateInputState();
     scrollToBottom();
     $chatInput.focus();
   }
