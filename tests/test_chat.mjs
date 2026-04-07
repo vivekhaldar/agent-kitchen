@@ -355,6 +355,95 @@ describe("handleUpdate message routing", () => {
   });
 });
 
+describe("tab switching isolates state", () => {
+  let win, api;
+
+  beforeEach(() => {
+    win = createChatEnv();
+    api = win._chatInternals;
+  });
+
+  function registerTab(tab) {
+    const state = api.getState();
+    state.chatTabs[tab.id] = tab;
+    state.activeChatTabId = tab.id;
+  }
+
+  it("switching to non-streaming tab enables input", () => {
+    const tab1 = makeTab(win);
+    tab1.id = "tab-1";
+    tab1.streaming = true;
+    registerTab(tab1);
+
+    const tab2 = makeTab(win);
+    tab2.id = "tab-2";
+    tab2.streaming = false;
+    const state = api.getState();
+    state.chatTabs[tab2.id] = tab2;
+
+    api.switchChatTab("tab-2");
+
+    const input = win.document.getElementById("chat-input");
+    assert.equal(input.disabled, false, "Input should be enabled for non-streaming tab");
+  });
+
+  it("switching to streaming tab disables input", () => {
+    const tab1 = makeTab(win);
+    tab1.id = "tab-1";
+    tab1.streaming = false;
+    registerTab(tab1);
+
+    const tab2 = makeTab(win);
+    tab2.id = "tab-2";
+    tab2.streaming = true;
+    const state = api.getState();
+    state.chatTabs[tab2.id] = tab2;
+
+    api.switchChatTab("tab-2");
+
+    const input = win.document.getElementById("chat-input");
+    assert.equal(input.disabled, true, "Input should be disabled for streaming tab");
+    assert.equal(input.placeholder, "Waiting for response...");
+  });
+
+  it("turn sidebar reflects the active tab's turns", () => {
+    const tab1 = makeTab(win);
+    tab1.id = "tab-1";
+    api.appendUserBubble(tab1, "Tab 1 message", []);
+    registerTab(tab1);
+
+    const tab2 = makeTab(win);
+    tab2.id = "tab-2";
+    const state = api.getState();
+    state.chatTabs[tab2.id] = tab2;
+
+    api.switchChatTab("tab-2");
+
+    const sidebar = win.document.getElementById("chat-turn-sidebar");
+    const turnItems = sidebar.querySelectorAll(".turn-item");
+    assert.equal(turnItems.length, 0, "Tab 2 has no turns, sidebar should be empty");
+  });
+
+  it("switching back shows the original tab's turns", () => {
+    const tab1 = makeTab(win);
+    tab1.id = "tab-1";
+    api.appendUserBubble(tab1, "Message in tab 1", []);
+    registerTab(tab1);
+
+    const tab2 = makeTab(win);
+    tab2.id = "tab-2";
+    const state = api.getState();
+    state.chatTabs[tab2.id] = tab2;
+
+    api.switchChatTab("tab-2");
+    api.switchChatTab("tab-1");
+
+    const sidebar = win.document.getElementById("chat-turn-sidebar");
+    const turnItems = sidebar.querySelectorAll(".turn-item");
+    assert.equal(turnItems.length, 1, "Tab 1 has one turn");
+  });
+});
+
 describe("handleServerMessage", () => {
   let win, api;
 

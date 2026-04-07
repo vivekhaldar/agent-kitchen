@@ -166,6 +166,9 @@
     container.classList.add("active");
 
     renderChatTabs();
+    renderTurnSidebar(tabData);
+    updateInputState();
+    renderImagePreview();
     connectWebSocket(tabData, existingSessionId);
     $chatInput.focus();
 
@@ -542,6 +545,8 @@
 
   function renderTurnSidebar(tabData) {
     if (!$turnSidebar) return;
+    var list = $turnSidebar.querySelector(".turn-list");
+    if (list) list.innerHTML = "";
     var turns = tabData.userTurns;
     if (turns.length === 0) {
       $turnSidebar.classList.add("hidden");
@@ -549,9 +554,7 @@
     }
 
     $turnSidebar.classList.remove("hidden");
-    var list = $turnSidebar.querySelector(".turn-list");
     if (!list) return;
-    list.innerHTML = "";
 
     turns.forEach(function (turn) {
       var item = document.createElement("div");
@@ -860,6 +863,8 @@
     finalizeAssistantMessage: finalizeAssistantMessage,
     renderToolCall: renderToolCall,
     sendUserMessage: sendUserMessage,
+    switchChatTab: switchChatTab,
+    updateInputState: updateInputState,
     buildMessagePayload: function (text, images) {
       var msg = { type: "user_message", text: text };
       if (images && images.length) {
