@@ -1,0 +1,47 @@
+is this done?
+
+---
+
+is this committed and pushed?
+
+---
+
+image pasting is not quite working--
+
+---
+
+ok cool --- there are some long paragraphs in the reply from the agent --- are we possibly dropping some newlines or paragraph breaks when rendering?
+
+---
+
+did you commit and push this? is there a test to catch this so it doesn't regress?
+
+---
+
+yes lets add some unit tests for the frontend code
+
+---
+
+ok so while the agent is working the textbox is frozen and i can't queue up any messages. also if i open a new agent tab, i can't sent messages to that new agent, and it shows the sidebar turns of the other (older) agent!
+
+---
+
+commit and push this
+
+---
+
+why are you some awesome?
+
+---
+
+ok general question -- here's a screenshot of the full ui -- 
+
+can you come up with some refinements that make the whole thing look and feel... better... and have more pop and polish? give me your suggestions. don't implement anything yet.
+
+---
+
+i'm big on typography as a UX mechanism. all the above are great but can you also suggest some typographic improvements.
+
+---
+
+ok implement all of the above -- the typographic improvements and the other improvements you suggested just before that. make logical, small commits along the way, with good test coverage
