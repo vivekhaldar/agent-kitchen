@@ -3,7 +3,7 @@
   "checkpoint_id": "b8da02d26e9d",
   "strategy": "manual-commit",
   "branch": "feature/rich-chat-view",
-  "checkpoints_count": 1,
+  "checkpoints_count": 6,
   "files_touched": [
     "src/agent_kitchen/acp_bridge.py"
   ],
@@ -13,13 +13,19 @@
       "transcript": "/b8/da02d26e9d/0/full.jsonl",
       "content_hash": "/b8/da02d26e9d/0/content_hash.txt",
       "prompt": "/b8/da02d26e9d/0/prompt.txt"
+    },
+    {
+      "metadata": "/b8/da02d26e9d/1/metadata.json",
+      "transcript": "/b8/da02d26e9d/1/full.jsonl",
+      "content_hash": "/b8/da02d26e9d/1/content_hash.txt",
+      "prompt": "/b8/da02d26e9d/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 23,
-    "cache_creation_tokens": 37243,
-    "cache_read_tokens": 674371,
-    "output_tokens": 3884,
-    "api_call_count": 17
+    "input_tokens": 54,
+    "cache_creation_tokens": 295856,
+    "cache_read_tokens": 3325107,
+    "output_tokens": 6807,
+    "api_call_count": 38
   }
 }
