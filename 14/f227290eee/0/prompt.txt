@@ -1,0 +1,21 @@
+is this done?
+
+---
+
+is this committed and pushed?
+
+---
+
+image pasting is not quite working--
+
+---
+
+ok cool --- there are some long paragraphs in the reply from the agent --- are we possibly dropping some newlines or paragraph breaks when rendering?
+
+---
+
+did you commit and push this? is there a test to catch this so it doesn't regress?
+
+---
+
+yes lets add some unit tests for the frontend code
