@@ -11,6 +11,11 @@
   100% { background: transparent; color: var(--text-primary); }
 }
 
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 0, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 77, 0, 0); }
+}
+
 :root {
   --bg-primary: #FAFAFA;
   --bg-secondary: #FFFFFF;
@@ -718,14 +723,17 @@ body {
 
 .status-dot.in-progress {
   background: var(--status-in-progress);
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 .status-dot.likely-in-progress {
   background: var(--status-likely-in-progress);
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 .status-dot.waiting-for-input {
   background: var(--status-waiting);
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 .status-dot.done {
@@ -757,11 +765,11 @@ body {
 
 .status-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   padding: 2px 8px;
   white-space: nowrap;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
@@ -783,11 +791,13 @@ body {
 .status-label.done {
   color: var(--status-done);
   background: rgba(0, 0, 0, 0.04);
+  opacity: 0.7;
 }
 
 .status-label.likely-done {
   color: var(--status-likely-done);
   background: rgba(0, 0, 0, 0.03);
+  opacity: 0.7;
 }
 
 /* ===== Time Ago ===== */
@@ -803,9 +813,9 @@ body {
 
 .source-badge {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 1px 5px;
   white-space: nowrap;
   letter-spacing: 0.04em;
   text-transform: uppercase;
