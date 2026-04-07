@@ -1,0 +1,13 @@
+is this done?
+
+---
+
+is this committed and pushed?
+
+---
+
+image pasting is not quite working--
+
+---
+
+ok cool --- there are some long paragraphs in the reply from the agent --- are we possibly dropping some newlines or paragraph breaks when rendering?
