@@ -691,13 +691,16 @@ body {
   grid-template-columns: 10px 1fr auto auto auto;
   align-items: center;
   gap: 14px;
-  padding: 7px 12px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: all var(--transition);
+  line-height: 1.5;
+  border-left: 3px solid transparent;
 }
 
 .session-row:hover {
   background: var(--bg-hover);
+  border-left-color: var(--accent);
 }
 
 .session-row.launched {
@@ -736,12 +739,18 @@ body {
 /* ===== Session Summary ===== */
 
 .session-summary {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-secondary);
+}
+
+.session-fresh .session-summary {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 /* ===== Status Label ===== */

@@ -154,10 +154,16 @@
 
   // --- Rendering ---
 
+  function isSessionFresh(session) {
+    if (!session.last_active) return false;
+    var hourAgo = Date.now() - 60 * 60 * 1000;
+    return new Date(session.last_active).getTime() >= hourAgo;
+  }
+
   function renderSessionRow(session) {
     const cssCls = statusCssClass(session.status);
     const row = document.createElement("div");
-    row.className = "session-row";
+    row.className = "session-row" + (isSessionFresh(session) ? " session-fresh" : "");
     row.innerHTML =
       '<div class="status-dot ' + cssCls + '"></div>' +
       '<div class="session-summary">' + escapeHtml(sessionLabel(session)) + "</div>" +
