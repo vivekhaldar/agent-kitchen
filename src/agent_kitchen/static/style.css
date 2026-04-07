@@ -665,11 +665,13 @@ body {
 
 .timeline-period {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   min-width: 80px;
   text-align: right;
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .timeline-desc {
@@ -804,9 +806,11 @@ body {
 
 .time-ago {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 /* ===== Source Badge ===== */
