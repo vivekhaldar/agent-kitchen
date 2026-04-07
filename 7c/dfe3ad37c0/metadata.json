@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "7cdfe3ad37c0",
+  "strategy": "manual-commit",
+  "branch": "feature/rich-chat-view",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/agent_kitchen/acp_bridge.py",
+    "src/agent_kitchen/server.py",
+    "src/agent_kitchen/static/chat.js",
+    "src/agent_kitchen/static/style.css",
+    "tests/test_acp_lifecycle.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/7c/dfe3ad37c0/0/metadata.json",
+      "transcript": "/7c/dfe3ad37c0/0/full.jsonl",
+      "content_hash": "/7c/dfe3ad37c0/0/content_hash.txt",
+      "prompt": "/7c/dfe3ad37c0/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 50,
+    "cache_creation_tokens": 89234,
+    "cache_read_tokens": 2402848,
+    "output_tokens": 12234,
+    "api_call_count": 40
+  }
+}

@@ -1,0 +1,24 @@
+first, commit and push the current state of this branch.
+
+
+then--- i've been testing the implementation in this branch (which is described in @docs/rich-chat-view-design.md ), and i have the following question:
+
+---
+
+first, commit and push the current state of this branch.
+
+
+then--- i've been testing the implementation in this branch (which is described in @docs/rich-chat-view-design.md ), and i have the following question:
+
+
+
+how does the lifecycle of a session work? e.g. i came back to a session after a while, it seems to have been terminated in the background, sent it a message, and then it just hangs there with no     
+indication of what's going on. there should be a clear "session terminated" message, and then when i sent it a new message that session should get resumed and reloaded in the background.
+
+---
+
+and all this works with ACP?
+
+---
+
+do it! do it NOW
