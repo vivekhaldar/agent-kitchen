@@ -1,0 +1,3 @@
+trying to start some new agents but it stays stuck on "waiting for response"... [Image #1]
+
+also the colors in light mode are off -- the tasks show up with a dark background, and the tab header is unreadable
