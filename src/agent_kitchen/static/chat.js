@@ -97,6 +97,7 @@
     renderChatTabs();
     renderTurnSidebar(chatTabs[tabId]);
     updateInputState();
+    renderImagePreview();
     scrollToBottom();
     $chatInput.focus();
   }
@@ -674,6 +675,7 @@
     appendUserBubble(tab, text, images);
     tab.pendingImages = [];
     renderImagePreview();
+    updateInputPlaceholder();
 
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
       var msg = { type: "user_message", text: text };
@@ -746,8 +748,20 @@
       var data = parts[1];
       tab.pendingImages.push({ data: data, mimeType: mimeType });
       renderImagePreview();
+      updateInputPlaceholder();
     };
     reader.readAsDataURL(file);
+  }
+
+  function updateInputPlaceholder() {
+    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
+    if (!tab || tab.streaming || tab.terminated) return;
+    var n = tab.pendingImages.length;
+    if (n > 0) {
+      $chatInput.placeholder = n + " image" + (n > 1 ? "s" : "") + " attached — add text or press Enter to send";
+    } else {
+      $chatInput.placeholder = "Send a message...";
+    }
   }
 
   function renderImagePreview() {
@@ -771,6 +785,7 @@
       removeBtn.addEventListener("click", function () {
         tab.pendingImages.splice(idx, 1);
         renderImagePreview();
+        updateInputPlaceholder();
       });
       thumb.appendChild(removeBtn);
       $imagePreview.appendChild(thumb);

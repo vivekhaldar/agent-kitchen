@@ -90,6 +90,7 @@ def build_content_blocks(msg: dict) -> list:
     """Build ACP content blocks from a WebSocket user_message payload.
 
     Returns a list of text/image blocks, or an empty list if there's no content.
+    Skips malformed images rather than crashing.
     """
     text = msg.get("text", "").strip()
     images = msg.get("images", [])
@@ -97,7 +98,12 @@ def build_content_blocks(msg: dict) -> list:
     if text:
         blocks.append(acp.text_block(text))
     for img in images:
-        blocks.append(acp.image_block(img["data"], img["mimeType"]))
+        data = img.get("data")
+        mime_type = img.get("mimeType")
+        if data and mime_type:
+            blocks.append(acp.image_block(data, mime_type))
+        else:
+            logger.warning("Skipping malformed image block: missing data or mimeType")
     return blocks
 
 

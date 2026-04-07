@@ -911,3 +911,40 @@ class TestBuildContentBlocks:
         )
         assert blocks[0].type == "text"
         assert blocks[1].type == "image"
+
+    def test_malformed_image_skipped(self):
+        """Images missing data or mimeType should be silently skipped."""
+        from agent_kitchen.server import build_content_blocks
+
+        # Missing data
+        blocks = build_content_blocks({"text": "hi", "images": [{"mimeType": "image/png"}]})
+        assert len(blocks) == 1
+        assert blocks[0].type == "text"
+
+        # Missing mimeType
+        blocks = build_content_blocks({"text": "", "images": [{"data": "abc123"}]})
+        assert len(blocks) == 0
+
+        # Empty data
+        blocks = build_content_blocks(
+            {"text": "", "images": [{"data": "", "mimeType": "image/png"}]}
+        )
+        assert len(blocks) == 0
+
+    def test_mix_of_valid_and_malformed_images(self):
+        """Valid images should be kept even when some are malformed."""
+        from agent_kitchen.server import build_content_blocks
+
+        blocks = build_content_blocks(
+            {
+                "text": "",
+                "images": [
+                    {"data": "good", "mimeType": "image/png"},
+                    {"mimeType": "image/png"},  # missing data
+                    {"data": "also_good", "mimeType": "image/jpeg"},
+                ],
+            }
+        )
+        assert len(blocks) == 2
+        assert blocks[0].data == "good"
+        assert blocks[1].data == "also_good"
