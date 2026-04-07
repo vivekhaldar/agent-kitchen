@@ -416,7 +416,12 @@
   function launchSession(session, rowEl) {
     rowEl.classList.add("launched");
     setTimeout(function () { rowEl.classList.remove("launched"); }, 500);
-    openTerminal(session);
+    var mode = localStorage.getItem("ak-view-mode") || "chat";
+    if (mode === "chat" && window.AgentChat) {
+      window.AgentChat.openChat(session);
+    } else {
+      openTerminal(session);
+    }
   }
 
   // --- Terminal Tabs ---
@@ -622,8 +627,13 @@
   }
 
   function openNewSession(cwd) {
-    var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
-    createTerminalTab("New: " + displayName, { mode: "new", cwd: cwd }, null);
+    var mode = localStorage.getItem("ak-view-mode") || "chat";
+    if (mode === "chat" && window.AgentChat) {
+      window.AgentChat.openNewChat(cwd);
+    } else {
+      var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
+      createTerminalTab("New: " + displayName, { mode: "new", cwd: cwd }, null);
+    }
   }
 
   function handleTerminalResize() {

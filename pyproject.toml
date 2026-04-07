@@ -27,6 +27,7 @@ dependencies = [
     "uvicorn[standard]",
     "claude-agent-sdk",
     "ptyprocess",
+    "agent-client-protocol",
 ]
 
 [project.optional-dependencies]

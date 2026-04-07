@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from ptyprocess import PtyProcess
 
 from agent_kitchen import config as _config
+from agent_kitchen.acp_bridge import AGENT_COMMANDS, ACPBridge, AuthRequiredError
 from agent_kitchen.cache import SummaryCache
 from agent_kitchen.config import CACHE_DIR
 from agent_kitchen.git_status import get_repo_root
@@ -488,6 +489,128 @@ def create_app(
                 pty.terminate(force=True)
             _terminals.pop(tid, None)
             logger.info("Terminal cleanup done for tid=%s", tid)
+
+    @app.websocket("/ws/chat")
+    async def chat_ws(ws: WebSocket):
+        await ws.accept()
+
+        # Wait for the "start" message with agent, cwd, optional sessionId
+        try:
+            start_msg = await ws.receive_json()
+        except Exception:
+            await ws.close(code=1008, reason="Expected JSON start message")
+            return
+
+        if start_msg.get("type") != "start":
+            await ws.close(code=1008, reason="First message must be type=start")
+            return
+
+        agent_name = start_msg.get("agent", "claude")
+        cwd = start_msg.get("cwd", "")
+        session_id = start_msg.get("sessionId")
+        auto_approve = start_msg.get("autoApprove", True)
+
+        if agent_name not in AGENT_COMMANDS:
+            await ws.send_json({"type": "error", "message": f"Unknown agent: {agent_name}"})
+            await ws.close()
+            return
+
+        if not cwd or not Path(cwd).is_dir():
+            await ws.send_json({"type": "error", "message": f"Invalid cwd: {cwd}"})
+            await ws.close()
+            return
+
+        logger.info("Chat WS: agent=%s cwd=%s session=%s", agent_name, cwd, session_id)
+
+        # Callback: forward ACP updates to WebSocket
+        async def on_update(sid, update):
+            try:
+                # Serialize the update — it may be a Pydantic model or dict
+                if hasattr(update, "model_dump"):
+                    data = update.model_dump(by_alias=True, exclude_none=True)
+                elif isinstance(update, dict):
+                    data = update
+                else:
+                    data = {"raw": str(update)}
+                data["type"] = "update"
+                await ws.send_json(data)
+            except Exception:
+                logger.debug("Failed to forward update", exc_info=True)
+
+        bridge = ACPBridge(
+            agent_command=AGENT_COMMANDS[agent_name],
+            cwd=cwd,
+            on_update=on_update,
+            auto_approve=auto_approve,
+        )
+
+        try:
+            # Start the agent and session
+            try:
+                init_result = await bridge.start(session_id=session_id)
+                await ws.send_json({"type": "session_init", **init_result})
+            except AuthRequiredError as e:
+                await ws.send_json(
+                    {
+                        "type": "auth_required",
+                        "agentName": e.agent_name,
+                        "message": e.message,
+                    }
+                )
+                # Wait for a retry message
+                while True:
+                    msg = await ws.receive_json()
+                    if msg.get("type") == "retry":
+                        try:
+                            init_result = await bridge.start(session_id=session_id)
+                            await ws.send_json({"type": "session_init", **init_result})
+                            break
+                        except AuthRequiredError as e2:
+                            await ws.send_json(
+                                {
+                                    "type": "auth_required",
+                                    "agentName": e2.agent_name,
+                                    "message": e2.message,
+                                }
+                            )
+                    else:
+                        continue
+            except Exception as e:
+                await ws.send_json({"type": "error", "message": str(e)})
+                await ws.close()
+                return
+
+            # Message loop: receive user messages and prompt the agent
+            while True:
+                msg = await ws.receive_json()
+                msg_type = msg.get("type", "")
+
+                if msg_type == "user_message":
+                    text = msg.get("text", "").strip()
+                    if not text:
+                        continue
+                    try:
+                        stop_reason = await bridge.prompt(text)
+                        await ws.send_json(
+                            {
+                                "type": "turn_complete",
+                                "stopReason": stop_reason,
+                            }
+                        )
+                    except Exception as e:
+                        logger.exception("Prompt failed")
+                        await ws.send_json({"type": "error", "message": str(e)})
+
+                elif msg_type == "cancel":
+                    await bridge.cancel()
+
+        except WebSocketDisconnect:
+            logger.info("Chat WS disconnected")
+        except Exception:
+            logger.exception("Chat WS error")
+        finally:
+            await bridge.close()
+            logger.info("Chat WS cleanup done")
 
     # Mount static files (serve index.html at root)
     static_dir = Path(__file__).parent / "static"

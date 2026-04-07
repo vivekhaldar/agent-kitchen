@@ -1,0 +1,602 @@
+// ABOUTME: Chat panel UI module — rich markdown rendering of ACP agent conversations.
+// ABOUTME: Manages chat tabs, WebSocket connections, streaming text, and tool call cards.
+
+(function () {
+  "use strict";
+
+  // --- Markdown setup ---
+  marked.setOptions({
+    highlight: function (code, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, { language: lang }).value;
+      }
+      return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true,
+  });
+
+  // --- State ---
+  var chatTabs = {};
+  var activeChatTabId = null;
+  var chatTabIdCounter = 0;
+
+  // --- DOM refs ---
+  var $chatPanel = document.getElementById("chat-panel");
+  var $chatTabs = document.getElementById("chat-tabs");
+  var $chatMessages = document.getElementById("chat-messages");
+  var $chatInput = document.getElementById("chat-input");
+  var $chatSend = document.getElementById("chat-send");
+  var $chatClose = document.getElementById("chat-close");
+  var $chatCost = document.getElementById("chat-cost");
+  var $viewToggle = document.getElementById("view-toggle");
+
+  // --- Helpers ---
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function renderMarkdown(text) {
+    return DOMPurify.sanitize(marked.parse(text || ""));
+  }
+
+  function generateChatTabId() {
+    return "chat-" + (chatTabIdCounter++);
+  }
+
+  function scrollToBottom() {
+    if (!$chatMessages) return;
+    $chatMessages.scrollTop = $chatMessages.scrollHeight;
+  }
+
+  // --- Tool call icons by kind ---
+  var TOOL_ICONS = {
+    read: "&#128196;",     // page
+    edit: "&#9998;",       // pencil
+    execute: "&#9654;",    // play
+    search: "&#128269;",   // magnifier
+    "delete": "&#128465;", // trash
+    think: "&#128161;",    // lightbulb
+    fetch: "&#127760;",    // globe
+  };
+
+  // --- Tab Management ---
+
+  function renderChatTabs() {
+    $chatTabs.innerHTML = "";
+    Object.keys(chatTabs).forEach(function (tabId) {
+      var tab = chatTabs[tabId];
+      var el = document.createElement("div");
+      el.className = "chat-tab" + (tabId === activeChatTabId ? " active" : "");
+      el.innerHTML =
+        '<span class="chat-tab-title">' + escapeHtml(tab.title) + "</span>" +
+        '<span class="chat-tab-close">&times;</span>';
+
+      el.querySelector(".chat-tab-title").addEventListener("click", function () {
+        switchChatTab(tabId);
+      });
+      el.querySelector(".chat-tab-close").addEventListener("click", function (e) {
+        e.stopPropagation();
+        closeChatTab(tabId);
+      });
+      $chatTabs.appendChild(el);
+    });
+  }
+
+  function switchChatTab(tabId) {
+    if (!chatTabs[tabId]) return;
+    if (activeChatTabId && chatTabs[activeChatTabId]) {
+      chatTabs[activeChatTabId].container.classList.remove("active");
+    }
+    activeChatTabId = tabId;
+    chatTabs[tabId].container.classList.add("active");
+    renderChatTabs();
+    scrollToBottom();
+    $chatInput.focus();
+  }
+
+  function closeChatTab(tabId) {
+    var tab = chatTabs[tabId];
+    if (!tab) return;
+    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
+      tab.ws.close();
+    }
+    if (tab.container && tab.container.parentNode) {
+      tab.container.parentNode.removeChild(tab.container);
+    }
+    delete chatTabs[tabId];
+
+    var remaining = Object.keys(chatTabs);
+    if (remaining.length > 0) {
+      switchChatTab(remaining[remaining.length - 1]);
+    } else {
+      activeChatTabId = null;
+      $chatPanel.classList.add("hidden");
+      document.body.classList.remove("chat-open");
+    }
+    renderChatTabs();
+  }
+
+  // --- Chat Tab Creation ---
+
+  function createChatTab(title, agent, cwd, existingSessionId, sessionSummary) {
+    var tabId = generateChatTabId();
+
+    var container = document.createElement("div");
+    container.className = "chat-tab-container";
+    $chatMessages.appendChild(container);
+
+    var tabData = {
+      id: tabId,
+      ws: null,
+      sessionId: null,
+      agent: agent,
+      cwd: cwd,
+      container: container,
+      title: title,
+      streaming: false,
+      currentTextAccum: "",
+      currentTextEl: null,
+      thinkingAccum: "",
+      thinkingEl: null,
+      renderScheduled: false,
+      sessionSummary: sessionSummary || null,
+    };
+    chatTabs[tabId] = tabData;
+
+    // Show panel
+    $chatPanel.classList.remove("hidden");
+    document.body.classList.add("chat-open");
+
+    // Hide previous active tab
+    if (activeChatTabId && chatTabs[activeChatTabId]) {
+      chatTabs[activeChatTabId].container.classList.remove("active");
+    }
+    activeChatTabId = tabId;
+    container.classList.add("active");
+
+    renderChatTabs();
+    connectWebSocket(tabData, existingSessionId);
+    $chatInput.focus();
+
+    return tabId;
+  }
+
+  // --- WebSocket ---
+
+  function connectWebSocket(tabData, sessionId) {
+    var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    var wsUrl = wsProtocol + "//" + location.host + "/ws/chat";
+    var ws = new WebSocket(wsUrl);
+    tabData.ws = ws;
+
+    ws.onopen = function () {
+      ws.send(JSON.stringify({
+        type: "start",
+        agent: tabData.agent,
+        cwd: tabData.cwd,
+        sessionId: sessionId || undefined,
+      }));
+    };
+
+    ws.onmessage = function (evt) {
+      try {
+        var msg = JSON.parse(evt.data);
+        handleServerMessage(tabData, msg);
+      } catch (e) {
+        console.error("Failed to parse chat message:", e);
+      }
+    };
+
+    ws.onclose = function () {
+      tabData.streaming = false;
+      updateInputState();
+    };
+
+    ws.onerror = function () {
+      appendSystemMessage(tabData, "Connection error");
+    };
+  }
+
+  // --- Message Routing ---
+
+  function handleServerMessage(tabData, msg) {
+    switch (msg.type) {
+      case "session_init":
+        tabData.sessionId = msg.sessionId;
+        if (msg.agentInfo) {
+          appendSystemMessage(tabData, msg.agentInfo.title + " connected");
+        }
+        if (!msg.historyLoaded && tabData.sessionSummary) {
+          appendInfoBanner(tabData, "Previous messages not available. " + tabData.sessionSummary);
+        }
+        break;
+
+      case "update":
+        handleUpdate(tabData, msg);
+        break;
+
+      case "turn_complete":
+        finalizeAssistantMessage(tabData);
+        tabData.streaming = false;
+        updateInputState();
+        break;
+
+      case "error":
+        appendSystemMessage(tabData, "Error: " + (msg.message || "Unknown error"));
+        tabData.streaming = false;
+        updateInputState();
+        break;
+
+      case "auth_required":
+        appendAuthBanner(tabData, msg);
+        break;
+
+      default:
+        console.log("Unknown chat message type:", msg.type);
+    }
+  }
+
+  function handleUpdate(tabData, msg) {
+    var su = msg.sessionUpdate;
+    switch (su) {
+      case "agent_message_chunk":
+        var text = (msg.content && msg.content.text) || "";
+        if (text) appendAgentText(tabData, text);
+        break;
+
+      case "agent_thought_chunk":
+        var thought = (msg.content && msg.content.text) || "";
+        if (thought) appendThinking(tabData, thought);
+        break;
+
+      case "user_message_chunk":
+        var userText = (msg.content && msg.content.text) || "";
+        if (userText) appendUserBubble(tabData, userText);
+        break;
+
+      case "tool_call":
+        renderToolCall(tabData, msg);
+        break;
+
+      case "tool_call_update":
+        updateToolCall(tabData, msg);
+        break;
+
+      case "usage_update":
+        renderUsage(msg);
+        break;
+
+      case "plan":
+        renderPlan(tabData, msg.entries || []);
+        break;
+
+      default:
+        // Gracefully ignore unknown update types
+        break;
+    }
+  }
+
+  // --- Rendering: User Messages ---
+
+  function appendUserBubble(tabData, text) {
+    // Close any open agent message
+    finalizeAssistantMessage(tabData);
+
+    var bubble = document.createElement("div");
+    bubble.className = "chat-bubble user";
+    bubble.textContent = text;
+    tabData.container.appendChild(bubble);
+    scrollToBottom();
+  }
+
+  // --- Rendering: Agent Text (streaming) ---
+
+  function appendAgentText(tabData, text) {
+    // Close thinking if open
+    finalizeThinking(tabData);
+
+    tabData.currentTextAccum += text;
+    if (!tabData.currentTextEl) {
+      var bubble = document.createElement("div");
+      bubble.className = "chat-bubble assistant";
+      var content = document.createElement("div");
+      content.className = "chat-md-content";
+      bubble.appendChild(content);
+      tabData.container.appendChild(bubble);
+      tabData.currentTextEl = content;
+    }
+    scheduleRender(tabData);
+  }
+
+  function scheduleRender(tabData) {
+    if (tabData.renderScheduled) return;
+    tabData.renderScheduled = true;
+    requestAnimationFrame(function () {
+      tabData.renderScheduled = false;
+      if (tabData.currentTextEl) {
+        tabData.currentTextEl.innerHTML = renderMarkdown(tabData.currentTextAccum);
+      }
+      scrollToBottom();
+    });
+  }
+
+  function finalizeAssistantMessage(tabData) {
+    if (tabData.currentTextEl && tabData.currentTextAccum) {
+      tabData.currentTextEl.innerHTML = renderMarkdown(tabData.currentTextAccum);
+    }
+    tabData.currentTextEl = null;
+    tabData.currentTextAccum = "";
+    finalizeThinking(tabData);
+  }
+
+  // --- Rendering: Thinking ---
+
+  function appendThinking(tabData, text) {
+    tabData.thinkingAccum += text;
+    if (!tabData.thinkingEl) {
+      var block = document.createElement("details");
+      block.className = "chat-thinking";
+      block.innerHTML = "<summary>Thinking...</summary><div class='chat-thinking-content'></div>";
+      tabData.container.appendChild(block);
+      tabData.thinkingEl = block.querySelector(".chat-thinking-content");
+    }
+    tabData.thinkingEl.textContent = tabData.thinkingAccum;
+    scrollToBottom();
+  }
+
+  function finalizeThinking(tabData) {
+    tabData.thinkingEl = null;
+    tabData.thinkingAccum = "";
+  }
+
+  // --- Rendering: Tool Calls ---
+
+  function renderToolCall(tabData, tc) {
+    // Close thinking
+    finalizeThinking(tabData);
+
+    var card = document.createElement("details");
+    card.className = "chat-tool-card";
+    card.setAttribute("data-tool-id", tc.toolCallId || "");
+
+    var status = tc.status || "pending";
+    var kind = tc.kind || "other";
+    var icon = TOOL_ICONS[kind] || "&#128295;"; // wrench default
+    var title = tc.title || "Tool call";
+    var locationText = "";
+    if (tc.locations && tc.locations.length > 0) {
+      var loc = tc.locations[0];
+      var path = (loc && loc.path) || "";
+      locationText = '<span class="chat-tool-path">' + escapeHtml(path.split("/").pop()) + "</span>";
+    }
+
+    card.innerHTML =
+      '<summary class="chat-tool-header">' +
+        '<span class="chat-tool-icon">' + icon + "</span>" +
+        '<span class="chat-tool-title">' + escapeHtml(title) + "</span>" +
+        locationText +
+        '<span class="chat-tool-status ' + escapeHtml(status) + '">' + escapeHtml(status) + "</span>" +
+      "</summary>" +
+      '<div class="chat-tool-body"></div>';
+
+    tabData.container.appendChild(card);
+    scrollToBottom();
+  }
+
+  function updateToolCall(tabData, update) {
+    var card = tabData.container.querySelector(
+      '.chat-tool-card[data-tool-id="' + (update.toolCallId || "") + '"]'
+    );
+    if (!card) return;
+
+    // Update status badge
+    if (update.status) {
+      var badge = card.querySelector(".chat-tool-status");
+      if (badge) {
+        badge.textContent = update.status;
+        badge.className = "chat-tool-status " + update.status;
+      }
+    }
+
+    // Append content
+    if (update.content && update.content.length > 0) {
+      var body = card.querySelector(".chat-tool-body");
+      if (body) {
+        update.content.forEach(function (item) {
+          if (item.type === "diff") {
+            renderDiff(body, item);
+          } else if (item.type === "content" && item.content) {
+            var text = item.content.text || "";
+            if (text) {
+              var pre = document.createElement("pre");
+              pre.className = "chat-tool-output";
+              pre.textContent = text.length > 2000 ? text.substring(0, 2000) + "\n...(truncated)" : text;
+              body.appendChild(pre);
+            }
+          }
+        });
+      }
+    }
+    scrollToBottom();
+  }
+
+  function renderDiff(container, diff) {
+    var el = document.createElement("div");
+    el.className = "chat-diff";
+    var header = document.createElement("div");
+    header.className = "chat-diff-header";
+    header.textContent = diff.path || "file";
+    el.appendChild(header);
+
+    var pre = document.createElement("pre");
+    pre.className = "chat-diff-content";
+    // Simple diff display: show newText (the result)
+    pre.textContent = diff.newText || "";
+    el.appendChild(pre);
+    container.appendChild(el);
+  }
+
+  // --- Rendering: Plan ---
+
+  function renderPlan(tabData, entries) {
+    // Remove any existing plan
+    var existing = tabData.container.querySelector(".chat-plan");
+    if (existing) existing.parentNode.removeChild(existing);
+
+    if (!entries.length) return;
+
+    var el = document.createElement("div");
+    el.className = "chat-plan";
+    el.innerHTML = "<div class='chat-plan-title'>Plan</div>";
+    var list = document.createElement("ul");
+    entries.forEach(function (entry) {
+      var li = document.createElement("li");
+      var statusIcon = entry.status === "completed" ? "&#10003;" : entry.status === "failed" ? "&#10007;" : "&#9744;";
+      li.innerHTML = '<span class="chat-plan-icon">' + statusIcon + '</span> ' + escapeHtml(entry.content || "");
+      li.className = "chat-plan-entry " + (entry.status || "pending");
+      list.appendChild(li);
+    });
+    el.appendChild(list);
+    tabData.container.appendChild(el);
+    scrollToBottom();
+  }
+
+  // --- Rendering: Usage ---
+
+  function renderUsage(msg) {
+    if (!$chatCost) return;
+    var cost = msg.cost;
+    if (cost && cost.amount != null) {
+      $chatCost.textContent = "$" + cost.amount.toFixed(4);
+      $chatCost.classList.remove("hidden");
+    }
+  }
+
+  // --- Rendering: System / Info / Auth ---
+
+  function appendSystemMessage(tabData, text) {
+    var el = document.createElement("div");
+    el.className = "chat-system-msg";
+    el.textContent = text;
+    tabData.container.appendChild(el);
+    scrollToBottom();
+  }
+
+  function appendInfoBanner(tabData, text) {
+    var el = document.createElement("div");
+    el.className = "chat-info-banner";
+    el.textContent = text;
+    tabData.container.appendChild(el);
+    scrollToBottom();
+  }
+
+  function appendAuthBanner(tabData, msg) {
+    var el = document.createElement("div");
+    el.className = "chat-auth-banner";
+    el.innerHTML =
+      '<div class="chat-auth-text">' + escapeHtml(msg.message || "Authentication required") + "</div>" +
+      '<button class="chat-auth-retry">Retry</button>';
+    el.querySelector(".chat-auth-retry").addEventListener("click", function () {
+      if (tabData.ws && tabData.ws.readyState === WebSocket.OPEN) {
+        tabData.ws.send(JSON.stringify({ type: "retry" }));
+        el.parentNode.removeChild(el);
+      }
+    });
+    tabData.container.appendChild(el);
+    scrollToBottom();
+  }
+
+  // --- Input Handling ---
+
+  function sendUserMessage() {
+    if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
+    var tab = chatTabs[activeChatTabId];
+    if (tab.streaming) return;
+
+    var text = $chatInput.value.trim();
+    if (!text) return;
+    $chatInput.value = "";
+    $chatInput.style.height = "auto";
+
+    appendUserBubble(tab, text);
+
+    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
+      tab.ws.send(JSON.stringify({ type: "user_message", text: text }));
+      tab.streaming = true;
+      updateInputState();
+    }
+  }
+
+  function updateInputState() {
+    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
+    var streaming = tab && tab.streaming;
+    $chatInput.disabled = streaming;
+    $chatSend.disabled = streaming;
+    $chatInput.placeholder = streaming ? "Waiting for response..." : "Send a message...";
+  }
+
+  // Auto-grow textarea
+  $chatInput.addEventListener("input", function () {
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 150) + "px";
+  });
+
+  // Enter to send, Shift+Enter for newline
+  $chatInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendUserMessage();
+    }
+  });
+
+  $chatSend.addEventListener("click", sendUserMessage);
+
+  $chatClose.addEventListener("click", function () {
+    // Close all tabs
+    Object.keys(chatTabs).forEach(function (tabId) {
+      var tab = chatTabs[tabId];
+      if (tab.ws && tab.ws.readyState === WebSocket.OPEN) tab.ws.close();
+      if (tab.container && tab.container.parentNode) tab.container.parentNode.removeChild(tab.container);
+    });
+    chatTabs = {};
+    activeChatTabId = null;
+    $chatPanel.classList.add("hidden");
+    document.body.classList.remove("chat-open");
+    renderChatTabs();
+  });
+
+  // View toggle — switch to terminal
+  $viewToggle.addEventListener("click", function () {
+    var mode = localStorage.getItem("ak-view-mode") === "terminal" ? "chat" : "terminal";
+    localStorage.setItem("ak-view-mode", mode);
+    $viewToggle.textContent = mode === "terminal" ? "Chat" : "TTY";
+  });
+
+  // --- Public API (called from app.js) ---
+
+  window.AgentChat = {
+    openChat: function (session) {
+      // Check for existing tab with same session
+      var ids = Object.keys(chatTabs);
+      for (var i = 0; i < ids.length; i++) {
+        if (chatTabs[ids[i]].sessionId === session.id) {
+          switchChatTab(ids[i]);
+          return;
+        }
+      }
+      var agent = session.source || "claude";
+      var title = session.summary || session.id.substring(0, 8);
+      createChatTab(title, agent, session.cwd, session.id, session.summary);
+    },
+
+    openNewChat: function (cwd) {
+      var agent = localStorage.getItem("ak-default-agent") || "claude";
+      var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
+      createChatTab("New: " + displayName, agent, cwd, null, null);
+    },
+  };
+})();

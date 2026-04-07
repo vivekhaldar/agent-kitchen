@@ -12,6 +12,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+  <!-- Chat view: markdown rendering, syntax highlighting, XSS protection -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/typescript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/css.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/languages/xml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
 </head>
 <body>
   <header class="header">
@@ -98,6 +110,23 @@
     <div id="terminal-container"></div>
   </div>
 
+  <div id="chat-panel" class="chat-panel hidden">
+    <div class="chat-panel-header">
+      <div class="chat-tabs" id="chat-tabs"></div>
+      <div class="chat-panel-controls">
+        <span class="chat-cost hidden" id="chat-cost"></span>
+        <button class="view-toggle" id="view-toggle" title="Switch to terminal view">TTY</button>
+        <button class="chat-panel-close" id="chat-close" aria-label="Close chat panel">&times;</button>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-bar">
+      <textarea id="chat-input" class="chat-input" placeholder="Send a message..." rows="1"></textarea>
+      <button id="chat-send" class="chat-send-btn" aria-label="Send message">&uarr;</button>
+    </div>
+  </div>
+
+  <script src="chat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
