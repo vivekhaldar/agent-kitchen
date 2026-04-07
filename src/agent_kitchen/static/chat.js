@@ -29,7 +29,7 @@
   var $chatSend = document.getElementById("chat-send");
   var $chatClose = document.getElementById("chat-close");
   var $chatCost = document.getElementById("chat-cost");
-  var $viewToggle = document.getElementById("view-toggle");
+
 
   // --- Helpers ---
 
@@ -596,12 +596,6 @@
     renderChatTabs();
   });
 
-  // View toggle — switch to terminal
-  $viewToggle.addEventListener("click", function () {
-    var mode = localStorage.getItem("ak-view-mode") === "terminal" ? "chat" : "terminal";
-    localStorage.setItem("ak-view-mode", mode);
-    $viewToggle.textContent = mode === "terminal" ? "Chat" : "TTY";
-  });
 
   // --- Public API (called from app.js) ---
 

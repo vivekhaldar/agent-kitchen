@@ -1031,17 +1031,6 @@ body.terminal-open .content {
   color: #666;
 }
 
-.view-toggle {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  padding: 2px 8px;
-  background: transparent;
-  color: #666;
-  border: 1px solid #444;
-  border-radius: 3px;
-  cursor: pointer;
-}
-.view-toggle:hover { color: #ccc; border-color: #888; }
 
 .chat-panel-close {
   font-size: 18px;
