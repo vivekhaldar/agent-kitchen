@@ -19,3 +19,7 @@ did you commit and push this? is there a test to catch this so it doesn't regres
 ---
 
 yes lets add some unit tests for the frontend code
+
+---
+
+ok so while the agent is working the textbox is frozen and i can't queue up any messages. also if i open a new agent tab, i can't sent messages to that new agent, and it shows the sidebar turns of the other (older) agent!
