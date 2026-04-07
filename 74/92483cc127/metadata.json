@@ -5,8 +5,13 @@
   "branch": "feature/rich-chat-view",
   "checkpoints_count": 0,
   "files_touched": [
+    "src/agent_kitchen/acp_bridge.py",
+    "src/agent_kitchen/server.py",
     "src/agent_kitchen/static/chat.js",
-    "src/agent_kitchen/static/style.css"
+    "src/agent_kitchen/static/index.html",
+    "src/agent_kitchen/static/style.css",
+    "tests/test_acp_lifecycle.py",
+    "tests/test_image_paste.py"
   ],
   "sessions": [
     {
@@ -14,6 +19,12 @@
       "transcript": "/74/92483cc127/0/full.jsonl",
       "content_hash": "/74/92483cc127/0/content_hash.txt",
       "prompt": "/74/92483cc127/0/prompt.txt"
+    },
+    {
+      "metadata": "/74/92483cc127/1/metadata.json",
+      "transcript": "/74/92483cc127/1/full.jsonl",
+      "content_hash": "/74/92483cc127/1/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
