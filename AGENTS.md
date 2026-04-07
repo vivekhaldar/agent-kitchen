@@ -12,10 +12,11 @@ uvx agent-kitchen web
 uv pip install -e ".[dev]"
 
 # Run tests
-uv run pytest                                          # all tests
+uv run pytest                                          # all tests (Python)
 uv run pytest tests/test_scanner.py                    # single file
 uv run pytest tests/test_scanner.py::test_decode_simple # single test
 uv run pytest -v -s                                    # verbose with stdout
+node --test tests/test_chat.mjs                        # frontend JS tests
 
 # Lint and format
 uvx ruff check --fix .

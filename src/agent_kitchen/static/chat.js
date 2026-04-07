@@ -850,4 +850,48 @@
       createChatTab("New: " + displayName, agent, cwd, null, null);
     },
   };
+
+  // Exposed for testing — not part of the public API
+  window._chatInternals = {
+    handleServerMessage: handleServerMessage,
+    handleUpdate: handleUpdate,
+    appendAgentText: appendAgentText,
+    appendUserBubble: appendUserBubble,
+    finalizeAssistantMessage: finalizeAssistantMessage,
+    renderToolCall: renderToolCall,
+    sendUserMessage: sendUserMessage,
+    buildMessagePayload: function (text, images) {
+      var msg = { type: "user_message", text: text };
+      if (images && images.length) {
+        msg.images = images.map(function (img) {
+          return { data: img.data, mimeType: img.mimeType };
+        });
+      }
+      return msg;
+    },
+    getState: function () {
+      return { chatTabs: chatTabs, activeChatTabId: activeChatTabId };
+    },
+    createTabData: function (container) {
+      return {
+        id: "test-tab",
+        ws: null,
+        sessionId: null,
+        agent: "claude",
+        cwd: "/tmp",
+        container: container,
+        title: "Test",
+        streaming: false,
+        currentTextAccum: "",
+        currentTextEl: null,
+        thinkingAccum: "",
+        thinkingEl: null,
+        renderScheduled: false,
+        sessionSummary: null,
+        userTurns: [],
+        activeTurnIndex: -1,
+        pendingImages: [],
+      };
+    },
+  };
 })();

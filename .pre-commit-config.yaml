@@ -14,3 +14,10 @@ repos:
         types: [python]
         pass_filenames: false
         always_run: true
+      - id: js-tests
+        name: js-tests
+        entry: node --test tests/test_chat.mjs
+        language: system
+        types_or: [javascript, html]
+        pass_filenames: false
+        always_run: true

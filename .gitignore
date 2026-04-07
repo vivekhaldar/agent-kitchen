@@ -13,3 +13,4 @@ venv/
 .ruff_cache/
 .env
 .env.*
+node_modules/
