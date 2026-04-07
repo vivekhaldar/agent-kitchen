@@ -1,0 +1,7 @@
+ok this looks better. now on to the next feature.
+
+currently there is no ability to paste images from the clipboard into the message i'm sending back to the agent. how can we add that?
+
+---
+
+yes go ahead and implement. make sure to have good tests.
