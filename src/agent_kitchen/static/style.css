@@ -497,16 +497,27 @@ body {
 
 .search-hint-bar {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
-  text-align: right;
   margin-bottom: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  max-width: 300px;
+}
+
+.search-hint-bar:hover {
+  border-color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .search-hint-bar kbd {
   font-family: var(--font-mono);
   font-size: 11px;
-  background: var(--bg-surface);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 5px;

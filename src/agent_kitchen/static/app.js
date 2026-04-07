@@ -907,6 +907,11 @@
 
   $btnRefresh.addEventListener("click", refreshSessions);
 
+  var $searchHintBar = document.getElementById("search-hint-bar");
+  if ($searchHintBar) {
+    $searchHintBar.addEventListener("click", openSearch);
+  }
+
   // --- Init ---
 
   fetchSessions();
