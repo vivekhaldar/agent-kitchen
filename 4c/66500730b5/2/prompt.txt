@@ -1,0 +1,5 @@
+ok run this and serve the web ui (but on a port other than 8099, coz I already have an instance running)
+
+---
+
+how does the lifecycle of a session work? e.g. i came back to a session after a while, it seems to have been terminated in the background, sent it a message, and then it just hangs there with no indication of what's going on. there should be a clear "session terminated" message, and then when i sent it a new message that session should get resumed and reloaded in the background.
