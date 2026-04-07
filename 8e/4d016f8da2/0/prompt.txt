@@ -1,1 +1,9 @@
 is this done?
+
+---
+
+is this committed and pushed?
+
+---
+
+image pasting is not quite working--
