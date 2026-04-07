@@ -41,3 +41,7 @@ this looks awesome! commit and push!
 there's this one previous session it can't quite load -- it just says
 
 "Previous messages not available. Analyzing STG/Avid Project Reimagine templates and writing markdown documentatio..."
+
+---
+
+ugh -- ran into this error again "Error: Separator is not found, and chunk exceed the limit"
