@@ -232,8 +232,10 @@ class ACPBridge:
         await self.close()
         return await self.start(session_id=old_session_id)
 
-    async def prompt(self, text: str) -> str:
+    async def prompt(self, content_blocks: list) -> str:
         """Send user message. Updates stream via on_update callback. Returns stop_reason.
+
+        content_blocks is a list of ACP content blocks (text_block, image_block, etc.).
 
         If the agent process has died, automatically restarts and resumes the
         session before sending the message.
@@ -247,7 +249,7 @@ class ACPBridge:
 
         response = await self._conn.prompt(
             session_id=self._session_id,
-            prompt=[acp.text_block(text)],
+            prompt=content_blocks,
         )
         return getattr(response, "stopReason", "end_turn")
 

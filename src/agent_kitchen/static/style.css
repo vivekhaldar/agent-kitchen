@@ -1455,6 +1455,65 @@ body.terminal-open .content {
 }
 .chat-auth-retry:hover { opacity: 0.8; }
 
+/* Image preview strip above input */
+.chat-image-preview {
+  display: none;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 8px 12px 0;
+  background: var(--bg-secondary, #1a1a1a);
+  border-top: 1px solid var(--border, #333);
+  overflow-x: auto;
+}
+.chat-image-preview.active {
+  display: flex;
+}
+.image-preview-thumb {
+  position: relative;
+  flex-shrink: 0;
+}
+.image-preview-thumb img {
+  height: 64px;
+  max-width: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.image-preview-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: var(--text-muted);
+  color: var(--bg-primary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-preview-remove:hover {
+  background: var(--accent);
+}
+
+/* Images inside user bubbles */
+.chat-bubble-images {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.chat-bubble-img {
+  max-width: 300px;
+  max-height: 200px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
 /* Input bar */
 .chat-input-bar {
   display: flex;

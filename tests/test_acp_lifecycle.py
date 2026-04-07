@@ -3,6 +3,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import acp
 import pytest
 
 from agent_kitchen.acp_bridge import ACPBridge
@@ -138,7 +139,81 @@ class TestPromptAutoRestart:
             }
 
         with patch.object(bridge, "restart", side_effect=fake_restart) as mock_restart:
-            stop_reason = await bridge.prompt("hello after restart")
+            stop_reason = await bridge.prompt([acp.text_block("hello after restart")])
 
         mock_restart.assert_called_once()
         assert stop_reason == "end_turn"
+
+
+class TestPromptContentBlocks:
+    """Bridge.prompt() should forward content blocks to the ACP connection."""
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_text_only(self):
+        bridge = ACPBridge(
+            agent_command=["echo"],
+            cwd="/tmp",
+            on_update=AsyncMock(),
+        )
+        bridge._session_id = "test-session"
+        mock_response = MagicMock()
+        mock_response.stopReason = "end_turn"
+        bridge._conn = AsyncMock()
+        bridge._conn.prompt = AsyncMock(return_value=mock_response)
+        bridge._proc = MagicMock(returncode=None)
+
+        blocks = [acp.text_block("hello")]
+        await bridge.prompt(blocks)
+
+        bridge._conn.prompt.assert_called_once_with(
+            session_id="test-session",
+            prompt=blocks,
+        )
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_image_block(self):
+        bridge = ACPBridge(
+            agent_command=["echo"],
+            cwd="/tmp",
+            on_update=AsyncMock(),
+        )
+        bridge._session_id = "test-session"
+        mock_response = MagicMock()
+        mock_response.stopReason = "end_turn"
+        bridge._conn = AsyncMock()
+        bridge._conn.prompt = AsyncMock(return_value=mock_response)
+        bridge._proc = MagicMock(returncode=None)
+
+        blocks = [
+            acp.text_block("describe this image"),
+            acp.image_block("iVBORw0KGgo=", "image/png"),
+        ]
+        await bridge.prompt(blocks)
+
+        bridge._conn.prompt.assert_called_once_with(
+            session_id="test-session",
+            prompt=blocks,
+        )
+
+    @pytest.mark.asyncio
+    async def test_prompt_with_image_only(self):
+        bridge = ACPBridge(
+            agent_command=["echo"],
+            cwd="/tmp",
+            on_update=AsyncMock(),
+        )
+        bridge._session_id = "test-session"
+        mock_response = MagicMock()
+        mock_response.stopReason = "end_turn"
+        bridge._conn = AsyncMock()
+        bridge._conn.prompt = AsyncMock(return_value=mock_response)
+        bridge._proc = MagicMock(returncode=None)
+
+        blocks = [acp.image_block("iVBORw0KGgo=", "image/png")]
+        result = await bridge.prompt(blocks)
+
+        assert result == "end_turn"
+        bridge._conn.prompt.assert_called_once_with(
+            session_id="test-session",
+            prompt=blocks,
+        )

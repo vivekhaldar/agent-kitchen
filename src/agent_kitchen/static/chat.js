@@ -29,6 +29,7 @@
   var $chatSend = document.getElementById("chat-send");
   var $chatClose = document.getElementById("chat-close");
   var $chatCost = document.getElementById("chat-cost");
+  var $imagePreview = document.getElementById("chat-image-preview");
 
 
   // --- Helpers ---
@@ -148,6 +149,7 @@
       sessionSummary: sessionSummary || null,
       userTurns: [],
       activeTurnIndex: -1,
+      pendingImages: [],
     };
     chatTabs[tabId] = tabData;
 
@@ -299,7 +301,7 @@
 
   // --- Rendering: User Messages ---
 
-  function appendUserBubble(tabData, text) {
+  function appendUserBubble(tabData, text, images) {
     // Close any open agent message
     finalizeAssistantMessage(tabData);
 
@@ -307,10 +309,25 @@
     var bubble = document.createElement("div");
     bubble.className = "chat-bubble user";
     bubble.setAttribute("data-turn-index", turnIndex);
-    bubble.textContent = text;
+    if (images && images.length) {
+      var imgStrip = document.createElement("div");
+      imgStrip.className = "chat-bubble-images";
+      images.forEach(function (img) {
+        var el = document.createElement("img");
+        el.src = "data:" + img.mimeType + ";base64," + img.data;
+        el.className = "chat-bubble-img";
+        imgStrip.appendChild(el);
+      });
+      bubble.appendChild(imgStrip);
+    }
+    if (text) {
+      var textEl = document.createElement("span");
+      textEl.textContent = text;
+      bubble.appendChild(textEl);
+    }
     tabData.container.appendChild(bubble);
 
-    tabData.userTurns.push({ index: turnIndex, element: bubble, text: text });
+    tabData.userTurns.push({ index: turnIndex, element: bubble, text: text || "(image)" });
     renderTurnSidebar(tabData);
     scrollToBottom();
   }
@@ -649,14 +666,23 @@
     if (tab.streaming) return;
 
     var text = $chatInput.value.trim();
-    if (!text) return;
+    var images = tab.pendingImages.slice();
+    if (!text && !images.length) return;
     $chatInput.value = "";
     $chatInput.style.height = "auto";
 
-    appendUserBubble(tab, text);
+    appendUserBubble(tab, text, images);
+    tab.pendingImages = [];
+    renderImagePreview();
 
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
-      tab.ws.send(JSON.stringify({ type: "user_message", text: text }));
+      var msg = { type: "user_message", text: text };
+      if (images.length) {
+        msg.images = images.map(function (img) {
+          return { data: img.data, mimeType: img.mimeType };
+        });
+      }
+      tab.ws.send(JSON.stringify(msg));
       tab.streaming = true;
       updateInputState();
     }
@@ -691,6 +717,66 @@
   });
 
   $chatSend.addEventListener("click", sendUserMessage);
+
+  // --- Image Paste ---
+
+  $chatInput.addEventListener("paste", function (e) {
+    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
+    if (!tab || tab.streaming) return;
+
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image/") === 0) {
+        e.preventDefault();
+        var file = items[i].getAsFile();
+        if (!file) continue;
+        readImageFile(tab, file);
+      }
+    }
+  });
+
+  function readImageFile(tab, file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      // result is "data:<mimeType>;base64,<data>"
+      var parts = reader.result.split(",");
+      var mimeType = file.type || "image/png";
+      var data = parts[1];
+      tab.pendingImages.push({ data: data, mimeType: mimeType });
+      renderImagePreview();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderImagePreview() {
+    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
+    $imagePreview.innerHTML = "";
+    if (!tab || !tab.pendingImages.length) {
+      $imagePreview.classList.remove("active");
+      return;
+    }
+    $imagePreview.classList.add("active");
+    tab.pendingImages.forEach(function (img, idx) {
+      var thumb = document.createElement("div");
+      thumb.className = "image-preview-thumb";
+      var imgEl = document.createElement("img");
+      imgEl.src = "data:" + img.mimeType + ";base64," + img.data;
+      thumb.appendChild(imgEl);
+      var removeBtn = document.createElement("button");
+      removeBtn.className = "image-preview-remove";
+      removeBtn.textContent = "\u00d7";
+      removeBtn.setAttribute("data-idx", idx);
+      removeBtn.addEventListener("click", function () {
+        tab.pendingImages.splice(idx, 1);
+        renderImagePreview();
+      });
+      thumb.appendChild(removeBtn);
+      $imagePreview.appendChild(thumb);
+    });
+  }
+
 
   // Turn navigation keyboard shortcuts (Ctrl+Up/Down)
   document.addEventListener("keydown", function (e) {

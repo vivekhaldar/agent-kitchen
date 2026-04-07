@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import acp
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -628,12 +629,19 @@ def create_app(
 
                 if msg_type == "user_message":
                     text = msg.get("text", "").strip()
-                    if not text:
+                    images = msg.get("images", [])
+                    if not text and not images:
                         continue
+                    # Build ACP content blocks from text and images
+                    content_blocks = []
+                    if text:
+                        content_blocks.append(acp.text_block(text))
+                    for img in images:
+                        content_blocks.append(acp.image_block(img["data"], img["mimeType"]))
                     try:
                         # prompt() auto-restarts if the agent process died
                         was_dead = not bridge.is_alive
-                        stop_reason = await bridge.prompt(text)
+                        stop_reason = await bridge.prompt(content_blocks)
                         if was_dead:
                             # Notify frontend that session was restarted
                             await ws.send_json(
