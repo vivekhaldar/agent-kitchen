@@ -140,7 +140,10 @@ class ACPBridge:
         """
         client = KitchenACPClient(self._on_update, self._cwd, self._auto_approve)
 
-        self._ctx = acp.spawn_agent_process(client, *self._agent_command)
+        # 10MB buffer — the default 64KB is too small for large file reads
+        self._ctx = acp.spawn_agent_process(
+            client, *self._agent_command, transport_kwargs={"limit": 10 * 1024 * 1024}
+        )
         self._conn, self._proc = await self._ctx.__aenter__()
 
         result = await self._conn.initialize(
@@ -173,9 +176,24 @@ class ACPBridge:
                 logger.info("Loaded existing session: %s", session_id)
             except Exception:
                 logger.warning(
-                    "session/load failed for %s, falling back to new session",
+                    "session/load failed for %s, restarting agent process",
                     session_id,
                     exc_info=True,
+                )
+                # load_session failure can corrupt the transport, so restart
+                # the entire agent process before creating a new session.
+                await self.close()
+                client = KitchenACPClient(self._on_update, self._cwd, self._auto_approve)
+                self._ctx = acp.spawn_agent_process(client, *self._agent_command)
+                self._conn, self._proc = await self._ctx.__aenter__()
+                await self._conn.initialize(
+                    protocol_version=acp.PROTOCOL_VERSION,
+                    client_capabilities=ClientCapabilities(
+                        fs={"readTextFile": True, "writeTextFile": True}
+                    ),
+                    client_info=Implementation(
+                        name="agent-kitchen", title="Agent Kitchen", version="0.1.0"
+                    ),
                 )
                 session_result = await self._conn.new_session(cwd=str(self._cwd), mcp_servers=[])
                 self._session_id = session_result.sessionId
