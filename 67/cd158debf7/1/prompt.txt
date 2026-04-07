@@ -1,0 +1,129 @@
+ok some new features i want to brainstorm:
+
+first -- ok the terminal view is nice, but i was thinking we could have a proper graphical view that renders markdown with nice formatting (very much like the claude desktop app). i want to do more ui enhancements on top of that, but the terminal view is limiting what i can do. how can we use claude code locally but still have a graphical view with nice text and table formatting etc?
+
+---
+
+i like option 3. 
+
+create a new feature branch.
+
+in that branch, do a detailed design and granular task breakdown for how to implement it
+
+---
+
+write out the plan to a new md file in the docs/ folder so i can read it
+
+---
+
+i want this to work with codex and other agents. instead of using claude code's jsonl format, is it possible to use a common protocol like ACP (research that)
+
+---
+
+yes, revise the design for ACP
+
+---
+
+nice. Can you address the following review comments:
+
+Findings
+
+  1. High: the design makes session/load a required part of the primary UX even though ACP makes it optional. docs/rich-
+     chat-view-design.md:177, docs/rich-chat-view-design.md:488, and docs/rich-chat-view-design.md:509 assume every
+     agent can replay history, but the protocol advertises loadSession separately and defaults it to false. That makes
+     the “agent-agnostic” claim at docs/rich-chat-view-design.md:7 too strong. The doc needs a fallback for agents that
+     can prompt/cancel but cannot load prior history.
+  2. High: the proposed ACP client is protocol-incomplete and partly invalid. docs/rich-chat-view-design.md:69
+     advertises terminal: true, but docs/rich-chat-view-design.md:318 only sketches session_update, permission, and file
+     callbacks; there is no plan for terminal/create, terminal/output, terminal/kill, terminal/release, or terminal/
+     wait_for_exit. The same snippet returns {"text": ...} from read_text_file at docs/rich-chat-view-design.md:329, but
+     ACP’s response field is content, and request_permission() at docs/rich-chat-view-design.md:325 returns an approved
+     shape that does not match ACP’s selected/cancelled outcome model. As written, the first permissioned or terminal-
+     backed tool call will break.
+  3. High: usage_update is presented as a standard ACP session update even though it is not part of the current ACP
+     schema. The doc treats it as core in docs/rich-chat-view-design.md:158, docs/rich-chat-view-design.md:193, and
+     docs/rich-chat-view-design.md:516. If cost/usage is important, it needs to be called out as an adapter-specific
+     extension, not part of the baseline “thin ACP relay”.
+  4. High: the startup flow omits ACP authentication entirely. docs/rich-chat-view-design.md:65, docs/rich-chat-view-
+     design.md:228, and docs/rich-chat-view-design.md:350 have no path for authMethods from initialize, no authenticate
+     request, and no recovery path when session/new returns auth_required. That blocks first-run or expired-login flows
+     for several of the agents the doc wants to support.
+  5. Medium: the doc does not explain how ACP-created sessions become durable Agent Kitchen sessions. Today the
+     dashboard’s source of truth is scanner-derived native log files and their native session IDs (src/agent_kitchen/
+     scanner.py:55, src/agent_kitchen/static/app.js:608). But the design adds openNewChat() and ACP session IDs in docs/
+     rich-chat-view-design.md:229, docs/rich-chat-view-design.md:387, and docs/rich-chat-view-design.md:446 without
+     saying how those IDs map back to the logs the existing scanner consumes. That is a real integration gap, not just
+     missing polish.
+  6. Medium: the permission model is too broad for a browser-triggered client. docs/rich-chat-view-design.md:325 auto-
+     approves all tool permissions, and docs/rich-chat-view-design.md:333 blindly writes arbitrary absolute paths.
+     Combined with the “agent-agnostic” scope, this removes agent-native safety checkpoints and allows out-of-repo
+     writes with no cwd/repo-root enforcement. The doc should at least scope FS access and make blanket approval
+     explicitly opt-in.
+
+---
+
+more feedback:
+
+Findings
+
+  1. High: the permission flow is still both ACP-invalid and functionally blocking. At docs/rich-chat-view-
+     design.md:398, docs/rich-chat-view-design.md:409, and docs/rich-chat-view-design.md:415, the callback returns a raw
+     permission option as outcome and looks for kind == "cancelled". ACP permission responses use a
+     RequestPermissionOutcome wrapper with outcome: "selected" plus optionId, or outcome: "cancelled"; cancelled is not
+     a permission option kind. On top of that, the default client message still starts with autoApprove: false at docs/
+     rich-chat-view-design.md:256, while interactive approval is explicitly deferred at docs/rich-chat-view-
+     design.md:403. In practice that means the default chat path rejects the tool calls needed for normal coding work.
+  2. High: the existing-session story still depends on an unproven session-ID mapping. The doc correctly says scanner
+     IDs and ACP IDs are different spaces at docs/rich-chat-view-design.md:295, but then assumes at docs/rich-chat-view-
+     design.md:299 that Claude’s ACP wrapper can take the native Claude session ID directly for session/load. That is
+     still the crux of the design, and it’s not something I’d treat as settled. The current Claude behavior I checked
+     still allows resumed context while changing the emitted session ID, which means this section should read as a
+     prototype assumption to validate, not a guaranteed mapping strategy.
+  3. Medium: the “no terminal capability” story still overpromises behavior. docs/rich-chat-view-design.md:67 and docs/
+     rich-chat-view-design.md:639 say agents that need terminal access will use internal handling or fall back to non-
+     terminal strategies. ACP only guarantees they will not call terminal/* when the client does not advertise that
+     capability; it does not guarantee command execution remains available. Unless you’ve verified Claude/Codex adapters
+     in this mode, this should be framed as a limitation/risk, not expected behavior.
+  4. Medium: the new-session integration step is still inconsistent with the current frontend. The plan says
+     openNewSession(cwd) should call AgentChat.openNewChat(session.source, cwd) at docs/rich-chat-view-design.md:544,
+     but the actual function only has cwd in scope at src/agent_kitchen/static/app.js:624. As written, that
+     implementation note cannot work without first defining where the source comes from.
+  5. Medium: capability-gated resume is assigned to the wrong side of the boundary. The backend chooses load_session vs
+     new_session in docs/rich-chat-view-design.md:348, but the polish section says the frontend reads
+     capabilities.loadSession from session_init to decide which path at docs/rich-chat-view-design.md:590. By that point
+     the backend has already picked the path. If you want the UI to explain “history loaded” vs “fresh continuation”,
+     the server needs to send an explicit result flag, not just raw capabilities.
+
+  The doc is materially better than the first version. The earlier fixes around optional loadSession, usage_update,
+  auth, scoped FS, and terminal callbacks are real improvements. The remaining problems are mostly concentrated around
+  session resume and permission handling, which are now the two places I’d prototype before treating the design as
+  implementation-ready.
+
+  Cross-checks: ACP schema (https://agentclientprotocol.com/protocol/schema), ACP session setup
+  (https://agentclientprotocol.com/protocol/session-setup), ACP session-resume RFD
+  (https://agentclientprotocol.com/rfds/session-resume), Claude issue #8069
+  (https://github.com/anthropics/claude-code/issues/8069).
+
+---
+
+more findings!
+
+1. High: the auto-approve pseudocode still uses the wrong option field. At docs/rich-chat-view-design.md:416 the text
+     correctly says ACP needs {outcome: "selected", optionId}, but the actual example returns options[0].get("id") at
+     docs/rich-chat-view-design.md:428. ACP permission selection is keyed by optionId, not id, so this would break the
+     default approval path.
+  2. Medium: the auth design is still internally inconsistent and still narrower than the supported-agent claim
+     suggests. The auth section says the bridge sends auth_required with authMethods at docs/rich-chat-view-
+     design.md:94, but the WebSocket contract only shows agentName and message at docs/rich-chat-view-design.md:281.
+     More importantly, the design never uses ACP authenticate; it assumes external CLI login is always enough at docs/
+     rich-chat-view-design.md:96 and docs/rich-chat-view-design.md:655. That may be fine for some wrappers, but it is
+     not agent-agnostic unless you validate that each supported wrapper shares auth state with its CLI.
+  3. Low: the read_text_file callback still ignores ACP slice parameters. At docs/rich-chat-view-design.md:432 it always
+     returns the whole file, but ACP fs/read_text_file can request a specific line and limit. That is unlikely to hard-
+     fail, but it violates the request shape and can inflate context/perf unnecessarily.
+
+  Everything else I flagged before is substantially better. The loadSession story is now correctly framed as a prototype
+  assumption, the terminal risk is explicitly called out and front-loaded into validation, and the openNewChat(cwd)
+  integration mismatch is fixed.
+
+  Source cross-check: https://agentclientprotocol.com/protocol/schema
