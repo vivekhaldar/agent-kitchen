@@ -482,10 +482,30 @@
 
   function renderUsage(msg) {
     if (!$chatCost) return;
-    var cost = msg.cost;
-    if (cost && cost.amount != null) {
-      $chatCost.textContent = "$" + cost.amount.toFixed(4);
-      $chatCost.classList.remove("hidden");
+    var parts = [];
+
+    if (msg.cost && msg.cost.amount != null) {
+      parts.push("$" + msg.cost.amount.toFixed(4));
+    }
+
+    if (msg.used != null && msg.size != null && msg.size > 0) {
+      var usedK = Math.round(msg.used / 1000);
+      var sizeK = Math.round(msg.size / 1000);
+      var pct = Math.round((msg.used / msg.size) * 100);
+      parts.push(usedK + "K / " + sizeK + "K (" + pct + "%)");
+    }
+
+    if (parts.length > 0) {
+      $chatCost.textContent = parts.join(" | ");
+      $chatCost.classList.remove("hidden", "context-warn", "context-critical");
+      if (msg.used != null && msg.size != null && msg.size > 0) {
+        var pct = (msg.used / msg.size) * 100;
+        if (pct >= 90) {
+          $chatCost.classList.add("context-critical");
+        } else if (pct >= 75) {
+          $chatCost.classList.add("context-warn");
+        }
+      }
     }
   }
 

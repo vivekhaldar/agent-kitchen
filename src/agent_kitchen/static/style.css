@@ -1028,7 +1028,19 @@ body.terminal-open .content {
 .chat-cost {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
-  color: #666;
+  color: #888;
+  padding: 2px 8px;
+  border: 1px solid #333;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.chat-cost.context-warn {
+  color: #e5c07b;
+  border-color: #e5c07b44;
+}
+.chat-cost.context-critical {
+  color: #e06c75;
+  border-color: #e06c7544;
 }
 
 
