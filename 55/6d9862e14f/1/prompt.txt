@@ -1,0 +1,11 @@
+ok good. commit and push
+
+---
+
+ok on to the next few features. 
+
+for now, just investigate and plan.
+
+- when i type "/" i want an autocomplete set of suggestions for my slash commands
+- can you show tokens used so far and what percentage of the context window is left?
+- i want some quick way to flip through a very long session, using each turn as an anchor -- i want to quickly scroll to the places where i typed a message. how could that work in our current setup?
