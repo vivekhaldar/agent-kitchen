@@ -45,9 +45,6 @@
   --bg-table-header: rgba(0, 0, 0, 0.04);
   --border-table: #CCCCCC;
 
-  /* Chat tool cards */
-  --bg-tool-card: #F5F5F5;
-
   --radius: 4px;
   --transition: 120ms ease;
 
@@ -1293,7 +1290,7 @@ body.terminal-open .content {
   margin: 6px 0;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg-tool-card);
+  background: var(--bg-surface);
   font-size: 13px;
 }
 
@@ -1554,8 +1551,6 @@ body.chat-open .content {
     --bg-code-inline: rgba(255, 255, 255, 0.08);
     --bg-table-header: rgba(255, 255, 255, 0.05);
     --border-table: #444444;
-
-    --bg-tool-card: #1a1a1a;
 
     --status-done: #888888;
     --status-likely-done: #666666;
