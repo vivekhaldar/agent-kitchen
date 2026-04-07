@@ -5,7 +5,9 @@
   "branch": "feature/rich-chat-view",
   "checkpoints_count": 1,
   "files_touched": [
-    "src/agent_kitchen/static/index.html"
+    "src/agent_kitchen/static/chat.js",
+    "src/agent_kitchen/static/index.html",
+    "src/agent_kitchen/static/style.css"
   ],
   "sessions": [
     {
@@ -19,6 +21,12 @@
       "transcript": "/bb/6e3e7320df/1/full.jsonl",
       "content_hash": "/bb/6e3e7320df/1/content_hash.txt",
       "prompt": "/bb/6e3e7320df/1/prompt.txt"
+    },
+    {
+      "metadata": "/bb/6e3e7320df/2/metadata.json",
+      "transcript": "/bb/6e3e7320df/2/full.jsonl",
+      "content_hash": "/bb/6e3e7320df/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
