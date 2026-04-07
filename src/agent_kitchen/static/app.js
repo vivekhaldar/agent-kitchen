@@ -184,12 +184,14 @@
   function buildGroupHeaderHtml(opts, isExpanded, sessionCount) {
     var chevron = '<span class="repo-chevron ' + (isExpanded ? "expanded" : "") + '" aria-hidden="true">\u25B6</span>';
     var icon = opts.icon || "";
-    var name = '<span class="repo-name">' + escapeHtml(opts.displayName) + "</span>";
-    var meta = '<span class="repo-meta">(' + opts.metaText + ")</span>";
+    var name = '<span class="repo-name-display">' + escapeHtml(opts.displayName) + "</span>";
+    var meta = '<span class="repo-meta-line">' + opts.metaText + "</span>";
     var btn = '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(opts.cwd) + '" aria-label="New session in ' + escapeHtml(opts.displayName) + '">+</button>';
 
     return (
-      '<div class="repo-header-left">' + chevron + icon + name + meta + "</div>" +
+      '<div class="repo-header-left">' + chevron + icon +
+        '<div class="repo-header-info">' + name + meta + '</div>' +
+      "</div>" +
       '<div class="repo-header-right">' + btn + timeAgo(opts.lastActive) + "</div>"
     );
   }

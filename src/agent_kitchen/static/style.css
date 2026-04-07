@@ -579,25 +579,33 @@ body {
   flex-shrink: 0;
 }
 
-.repo-name {
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.01em;
+.repo-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-.repo-meta {
+.repo-name-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.repo-meta-line {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
+  line-height: 1.3;
 }
 
-.repo-meta .dirty {
+.repo-meta-line .dirty {
   color: var(--accent);
   font-weight: 500;
 }
 
-.repo-meta .unpushed {
+.repo-meta-line .unpushed {
   color: var(--text-secondary);
   font-weight: 500;
 }
