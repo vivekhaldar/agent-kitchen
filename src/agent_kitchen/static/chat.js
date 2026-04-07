@@ -396,8 +396,8 @@
   // --- Rendering: Tool Calls ---
 
   function renderToolCall(tabData, tc) {
-    // Close thinking
-    finalizeThinking(tabData);
+    // Close any open text/thinking so the tool card appears between bubbles
+    finalizeAssistantMessage(tabData);
 
     var card = document.createElement("details");
     card.className = "chat-tool-card";
