@@ -1,0 +1,65 @@
+ok good. commit and push
+
+---
+
+ok on to the next few features. 
+
+for now, just investigate and plan.
+
+- when i type "/" i want an autocomplete set of suggestions for my slash commands
+- can you show tokens used so far and what percentage of the context window is left?
+- i want some quick way to flip through a very long session, using each turn as an anchor -- i want to quickly scroll to the places where i typed a message. how could that work in our current setup?
+
+---
+
+implement 2; 
+
+implement 3; use option B; 
+
+make separate commits
+
+---
+
+can you restart on port 8100?
+
+---
+
+<task-notification>
+<task-id>b9hqckz00</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-haldar-repos-gh-agent-kitchen/367ab3ff-c786-4cb5-b0ed-94059fa40f65/tasks/b9hqckz00.output</output-file>
+<status>completed</status>
+<summary>Background command "Kill old process and restart on port 8100" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+this looks awesome! commit and push!
+
+---
+
+there's this one previous session it can't quite load -- it just says
+
+"Previous messages not available. Analyzing STG/Avid Project Reimagine templates and writing markdown documentatio..."
+
+---
+
+ugh -- ran into this error again "Error: Separator is not found, and chunk exceed the limit"
+
+---
+
+<task-notification>
+<task-id>bdbr03lbp</task-id>
+<tool-use-id>toolu_01GiFoYttmt8e6FP69TRML3s</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-haldar-repos-gh-agent-kitchen/92ceaef1-f978-4f51-ac73-90baa50b5eec/tasks/bdbr03lbp.output</output-file>
+<status>completed</status>
+<summary>Background command "Restart server on port 8100" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+"when the agent reads a large file and sends it back as a JSON-RPC message, it exceeds that limit." -> actually can we detect such messages and ignore the part that just has the file contents?
+
+---
+
+yes do that server-side
