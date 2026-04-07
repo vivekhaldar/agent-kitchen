@@ -120,6 +120,13 @@ class ACPBridge:
         return self._session_id
 
     @property
+    def is_alive(self) -> bool:
+        """True when the agent process is running and the connection is usable."""
+        if self._conn is None or self._proc is None:
+            return False
+        return self._proc.returncode is None
+
+    @property
     def can_load_session(self) -> bool:
         if self._agent_caps is None:
             return False
@@ -198,10 +205,27 @@ class ACPBridge:
             },
         }
 
+    async def restart(self) -> dict:
+        """Close the dead bridge and start a new one, resuming the session if possible.
+
+        Returns the same dict as start(): {sessionId, historyLoaded, agentInfo}.
+        """
+        old_session_id = self._session_id
+        await self.close()
+        return await self.start(session_id=old_session_id)
+
     async def prompt(self, text: str) -> str:
-        """Send user message. Updates stream via on_update callback. Returns stop_reason."""
-        if not self._conn or not self._session_id:
+        """Send user message. Updates stream via on_update callback. Returns stop_reason.
+
+        If the agent process has died, automatically restarts and resumes the
+        session before sending the message.
+        """
+        if not self._session_id:
             raise RuntimeError("Bridge not started")
+
+        if not self.is_alive:
+            logger.info("Agent process died, restarting for session %s", self._session_id)
+            await self.restart()
 
         response = await self._conn.prompt(
             session_id=self._session_id,

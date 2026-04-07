@@ -235,6 +235,19 @@
         appendAuthBanner(tabData, msg);
         break;
 
+      case "session_terminated":
+        tabData.streaming = false;
+        tabData.terminated = true;
+        appendSessionTerminated(tabData);
+        updateInputState();
+        break;
+
+      case "session_restarted":
+        tabData.terminated = false;
+        tabData.sessionId = msg.sessionId || tabData.sessionId;
+        appendSystemMessage(tabData, "Session resumed");
+        break;
+
       default:
         console.log("Unknown chat message type:", msg.type);
     }
@@ -494,6 +507,14 @@
     scrollToBottom();
   }
 
+  function appendSessionTerminated(tabData) {
+    var el = document.createElement("div");
+    el.className = "chat-system-msg chat-terminated";
+    el.textContent = "Session ended — send a message to resume";
+    tabData.container.appendChild(el);
+    scrollToBottom();
+  }
+
   function appendAuthBanner(tabData, msg) {
     var el = document.createElement("div");
     el.className = "chat-auth-banner";
@@ -536,7 +557,13 @@
     var streaming = tab && tab.streaming;
     $chatInput.disabled = streaming;
     $chatSend.disabled = streaming;
-    $chatInput.placeholder = streaming ? "Waiting for response..." : "Send a message...";
+    if (streaming) {
+      $chatInput.placeholder = "Waiting for response...";
+    } else if (tab && tab.terminated) {
+      $chatInput.placeholder = "Send a message to resume session...";
+    } else {
+      $chatInput.placeholder = "Send a message...";
+    }
   }
 
   // Auto-grow textarea

@@ -544,11 +544,27 @@ def create_app(
             auto_approve=auto_approve,
         )
 
+        # Background task: monitor agent process health
+        async def monitor_process():
+            """Poll bridge liveness and notify the frontend when the agent dies."""
+            while True:
+                await asyncio.sleep(2)
+                if not bridge.is_alive and bridge.session_id:
+                    logger.info("Agent process died for session %s", bridge.session_id)
+                    try:
+                        await ws.send_json({"type": "session_terminated"})
+                    except Exception:
+                        pass
+                    return
+
+        monitor_task = None
+
         try:
             # Start the agent and session
             try:
                 init_result = await bridge.start(session_id=session_id)
                 await ws.send_json({"type": "session_init", **init_result})
+                monitor_task = asyncio.create_task(monitor_process())
             except AuthRequiredError as e:
                 await ws.send_json(
                     {
@@ -564,6 +580,7 @@ def create_app(
                         try:
                             init_result = await bridge.start(session_id=session_id)
                             await ws.send_json({"type": "session_init", **init_result})
+                            monitor_task = asyncio.create_task(monitor_process())
                             break
                         except AuthRequiredError as e2:
                             await ws.send_json(
@@ -590,7 +607,21 @@ def create_app(
                     if not text:
                         continue
                     try:
+                        # prompt() auto-restarts if the agent process died
+                        was_dead = not bridge.is_alive
                         stop_reason = await bridge.prompt(text)
+                        if was_dead:
+                            # Notify frontend that session was restarted
+                            await ws.send_json(
+                                {
+                                    "type": "session_restarted",
+                                    "sessionId": bridge.session_id,
+                                }
+                            )
+                            # Restart the monitor for the new process
+                            if monitor_task and not monitor_task.done():
+                                monitor_task.cancel()
+                            monitor_task = asyncio.create_task(monitor_process())
                         await ws.send_json(
                             {
                                 "type": "turn_complete",
@@ -609,6 +640,8 @@ def create_app(
         except Exception:
             logger.exception("Chat WS error")
         finally:
+            if monitor_task and not monitor_task.done():
+                monitor_task.cancel()
             await bridge.close()
             logger.info("Chat WS cleanup done")
 

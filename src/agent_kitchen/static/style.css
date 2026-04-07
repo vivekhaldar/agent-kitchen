@@ -1301,6 +1301,14 @@ body.terminal-open .content {
   font-family: var(--font-mono, monospace);
 }
 
+.chat-terminated {
+  color: #e06c75;
+  border: 1px solid #e06c7533;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 8px 0;
+}
+
 /* Info banner */
 .chat-info-banner {
   background: rgba(255,200,0,0.08);
