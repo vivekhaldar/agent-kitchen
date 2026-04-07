@@ -231,6 +231,7 @@
 
       case "turn_complete":
         finalizeAssistantMessage(tabData);
+        collapseCompletedTools(tabData);
         tabData.streaming = false;
         updateInputState();
         break;
@@ -620,6 +621,46 @@
     $turnSidebar.classList.toggle("collapsed");
   }
 
+  // --- Tool Collapsing ---
+
+  function collapseCompletedTools(tabData) {
+    var container = tabData.container;
+    var children = Array.from(container.children);
+    var i = 0;
+
+    while (i < children.length) {
+      // Find runs of consecutive completed tool cards
+      if (isCompletedToolCard(children[i])) {
+        var runStart = i;
+        while (i < children.length && isCompletedToolCard(children[i])) {
+          i++;
+        }
+        var runLength = i - runStart;
+        if (runLength >= 3) {
+          var details = container.ownerDocument.createElement("details");
+          details.className = "chat-tool-group";
+          var summary = container.ownerDocument.createElement("summary");
+          summary.textContent = runLength + " tool calls completed";
+          details.appendChild(summary);
+
+          // Insert the details element before the first card in the run
+          container.insertBefore(details, children[runStart]);
+          for (var j = runStart; j < runStart + runLength; j++) {
+            details.appendChild(children[j]);
+          }
+        }
+      } else {
+        i++;
+      }
+    }
+  }
+
+  function isCompletedToolCard(el) {
+    if (!el || !el.classList || !el.classList.contains("chat-tool-card")) return false;
+    var statusEl = el.querySelector(".chat-tool-status");
+    return statusEl && statusEl.classList.contains("completed");
+  }
+
   // --- Rendering: System / Info / Auth ---
 
   function appendSystemMessage(tabData, text) {
@@ -862,6 +903,7 @@
     appendUserBubble: appendUserBubble,
     finalizeAssistantMessage: finalizeAssistantMessage,
     renderToolCall: renderToolCall,
+    collapseCompletedTools: collapseCompletedTools,
     sendUserMessage: sendUserMessage,
     switchChatTab: switchChatTab,
     updateInputState: updateInputState,

@@ -444,6 +444,67 @@ describe("tab switching isolates state", () => {
   });
 });
 
+describe("collapseCompletedTools", () => {
+  let win, api;
+
+  beforeEach(() => {
+    win = createChatEnv();
+    api = win._chatInternals;
+  });
+
+  it("collapses 3+ consecutive completed tool cards", () => {
+    const tab = makeTab(win);
+    api.renderToolCall(tab, { toolCallId: "tc-1", title: "Read", status: "completed" });
+    api.renderToolCall(tab, { toolCallId: "tc-2", title: "Edit", status: "completed" });
+    api.renderToolCall(tab, { toolCallId: "tc-3", title: "Bash", status: "completed" });
+
+    api.collapseCompletedTools(tab);
+
+    const groups = tab.container.querySelectorAll(".chat-tool-group");
+    assert.equal(groups.length, 1, "Should wrap 3 completed tools in a group");
+    assert.ok(groups[0].querySelector("summary").textContent.includes("3 tool calls completed"));
+    // Original cards should be inside the group
+    assert.equal(groups[0].querySelectorAll(".chat-tool-card").length, 3);
+  });
+
+  it("does not collapse fewer than 3 completed tool cards", () => {
+    const tab = makeTab(win);
+    api.renderToolCall(tab, { toolCallId: "tc-1", title: "Read", status: "completed" });
+    api.renderToolCall(tab, { toolCallId: "tc-2", title: "Edit", status: "completed" });
+
+    api.collapseCompletedTools(tab);
+
+    const groups = tab.container.querySelectorAll(".chat-tool-group");
+    assert.equal(groups.length, 0, "Should not collapse only 2 tools");
+  });
+
+  it("does not collapse non-consecutive completed tools", () => {
+    const tab = makeTab(win);
+    api.renderToolCall(tab, { toolCallId: "tc-1", title: "Read", status: "completed" });
+    api.renderToolCall(tab, { toolCallId: "tc-2", title: "Edit", status: "completed" });
+    api.appendAgentText(tab, "Some text between tools.");
+    api.finalizeAssistantMessage(tab);
+    api.renderToolCall(tab, { toolCallId: "tc-3", title: "Bash", status: "completed" });
+
+    api.collapseCompletedTools(tab);
+
+    const groups = tab.container.querySelectorAll(".chat-tool-group");
+    assert.equal(groups.length, 0, "Non-consecutive tools should not be collapsed");
+  });
+
+  it("does not collapse in-progress tools", () => {
+    const tab = makeTab(win);
+    api.renderToolCall(tab, { toolCallId: "tc-1", title: "Read", status: "completed" });
+    api.renderToolCall(tab, { toolCallId: "tc-2", title: "Edit", status: "completed" });
+    api.renderToolCall(tab, { toolCallId: "tc-3", title: "Bash", status: "in_progress" });
+
+    api.collapseCompletedTools(tab);
+
+    const groups = tab.container.querySelectorAll(".chat-tool-group");
+    assert.equal(groups.length, 0, "Run with in-progress tool should not be collapsed");
+  });
+});
+
 describe("handleServerMessage", () => {
   let win, api;
 
