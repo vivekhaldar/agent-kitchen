@@ -1,0 +1,9 @@
+sessions (old and new) are unresponsive -- [Image #1]
+
+---
+
+yes
+
+---
+
+how did this happen? how could this be prevented?
