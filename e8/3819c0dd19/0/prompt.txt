@@ -1,0 +1,1 @@
+in the text bubbles that contain user input (the orange ones), newlines i entered while inputting are getting erased
