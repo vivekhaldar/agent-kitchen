@@ -19,7 +19,11 @@ Any ACP Agent (Claude, Codex, Copilot, Gemini, ...)
 **Before**: Persistent PTY process ↔ raw bytes over WebSocket ↔ xterm.js
 **After**: ACP agent subprocess ↔ structured JSON-RPC over stdio ↔ FastAPI bridge ↔ WebSocket ↔ custom markdown renderer
 
-The existing terminal view stays as a fallback (toggle between chat and TTY mode).
+The existing terminal view stays as a fallback (the chat panel and terminal panel are independent).
+
+## Implementation Status
+
+All phases of the original design were implemented. The sections below document the final state of the implementation, noting deviations from the original plan and additional features that emerged during development.
 
 ## Agent Client Protocol (ACP) Overview
 
@@ -36,8 +40,6 @@ ACP is JSON-RPC 2.0 over stdio. The server spawns an agent as a child process an
 | Codex CLI | `npx @zed-industries/codex-acp` |
 | GitHub Copilot | `npx @github/copilot-language-server --acp` |
 | Gemini CLI | `npx @google/gemini-cli --experimental-acp` |
-| Qwen Code | `npx @qwen-code/qwen-code --acp` |
-| Augment Code | `npx @augmentcode/auggie --acp` |
 
 ### ACP Lifecycle
 
@@ -64,9 +66,7 @@ Client                              Agent (subprocess via stdio)
 
 #### Initialize (handshake)
 
-The client advertises only the capabilities it actually implements. Agent Kitchen does NOT advertise `terminal: true` because it does not implement the terminal callbacks (`terminal/create`, `terminal/output`, `terminal/kill`, etc.).
-
-**Limitation/risk**: ACP guarantees that agents won't *call* `terminal/*` when the client doesn't advertise the capability, but it does NOT guarantee that command execution tools remain fully functional without it. Some agents may degrade (e.g., unable to run shell commands, or running them with reduced visibility). Whether Claude Code and Codex ACP wrappers work correctly without terminal capability has **not been verified** and is a Phase 1 validation task. If agents require terminal capability for basic operation, we would need to implement the terminal callbacks — significant additional scope (~5 callbacks with process lifecycle management).
+Agent Kitchen advertises only `fs` capabilities (readTextFile, writeTextFile). It does NOT advertise `terminal: true` — terminal callbacks are not implemented.
 
 ```json
 // Client → Agent
@@ -85,15 +85,13 @@ The client advertises only the capabilities it actually implements. Agent Kitche
 }}
 ```
 
-The bridge must inspect the response to determine what the agent supports:
-- **`agentCapabilities.loadSession`**: Whether `session/load` is available (default: false). Stored per-agent.
+The bridge inspects the response to determine what the agent supports:
+- **`agentCapabilities.loadSession`**: Whether `session/load` is available (default: false). Stored per-bridge.
 - **`authMethods`**: If non-empty, the agent may require authentication before `session/new` succeeds.
 
 #### Authentication
 
-If `authMethods` is returned in the initialize response, or if `session/new` fails with an auth error, the bridge sends an `{"type": "auth_required", "agentName": "...", "message": "..."}` message to the browser. The frontend shows a prompt directing the user to authenticate the agent externally, then retries.
-
-Agent Kitchen does NOT call ACP's `authenticate` method or implement in-band OAuth flows — it delegates auth to each agent's own CLI (e.g., `claude auth login`, `gh auth login`). **Limitation**: This assumes each ACP wrapper shares auth state with its CLI counterpart. This is a reasonable assumption for Claude Code and Codex (which use the same credential stores), but is **not verified for all supported agents** (Copilot, Gemini, Qwen, Augment). If an agent's ACP wrapper manages its own auth independently from the CLI, the "run CLI login" guidance would be wrong. Phase 1 validation should test auth flows for each agent we claim to support.
+Agent Kitchen delegates auth to each agent's CLI (e.g., `claude auth login`, `gh auth login`). If `session/new` fails with an auth-related error, the bridge raises `AuthRequiredError`, and the frontend shows instructions with a retry button. ACP's in-band `authenticate` method is not used.
 
 #### Session Creation
 
@@ -110,11 +108,16 @@ Agent Kitchen does NOT call ACP's `authenticate` method or implement in-band OAu
 
 #### Prompt (user message)
 
+Prompts support text and image content blocks:
+
 ```json
 // Client → Agent
 {"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{
   "sessionId":"sess_abc123",
-  "prompt":[{"type":"text","text":"Fix the bug in server.py"}]
+  "prompt":[
+    {"type":"text","text":"Fix the bug in server.py"},
+    {"type":"image","data":"base64...","mimeType":"image/png"}
+  ]
 }}
 
 // Agent → Client (response, after all updates streamed)
@@ -205,7 +208,7 @@ All updates are JSON-RPC notifications (no `id`, no response expected):
 {"jsonrpc":"2.0","id":3,"result":null}
 ```
 
-**Fallback when `loadSession` is false**: The bridge creates a new session via `session/new` instead. The chat panel shows an info banner: "Previous messages not available — starting fresh continuation." The user can still send new prompts. The existing Agent Kitchen scanner summary is shown above the chat as context for what the session was about.
+**Fallback when `loadSession` is false or fails**: The bridge creates a new session via `session/new`. If `session/load` fails, the bridge restarts the entire agent process (to avoid transport corruption) before creating a fresh session. The chat panel shows an info banner with the scanner summary as context for what the session was about.
 
 ### ACP Update Types → Frontend Mapping
 
@@ -218,19 +221,15 @@ All updates are JSON-RPC notifications (no `id`, no response expected):
 | `user_message_chunk` | Render user bubble (during session/load replay) |
 | `tool_call` | Create collapsible tool call card (name, kind, status, locations) |
 | `tool_call_update` | Update tool card status, append output content |
-| `plan` | Render plan checklist (optional, above messages) |
-| `available_commands_update` | Ignore (editor-specific) |
-| `current_mode_update` | Show mode badge (e.g., "plan mode") |
-| `config_option_update` | Ignore |
-| `session_info_update` | Update session title |
+| `plan` | Render plan checklist |
+| `current_mode_update` | Show mode badge |
+| others | Gracefully ignored with a console.log |
 
 **Extension updates** (not in the core ACP spec — agent-specific, may not be present):
 
 | Update | Frontend Action | Notes |
 |---|---|---|
-| `usage_update` | Update cost/token badge in panel header | Only some ACP wrappers emit this. The frontend renders it when present but never depends on it. The cost badge simply stays hidden if no usage events arrive. |
-
-The frontend must handle unknown `sessionUpdate` types gracefully — log and ignore. As ACP evolves, new update types will appear.
+| `usage_update` | Update cost/token badge in panel header | Only some ACP wrappers emit this. The cost badge stays hidden if no usage events arrive. Context warning colors at 75% (yellow) and 90% (red). |
 
 ### ToolCall Object
 
@@ -260,27 +259,26 @@ The FastAPI server bridges between the browser WebSocket and the ACP agent subpr
 // Resume an existing session (history loaded only if agent supports loadSession)
 {"type": "start", "agent": "claude", "cwd": "/path", "sessionId": "sess_abc123"}
 
-// Start in restrictive mode (all tool permissions denied)
-{"type": "start", "agent": "claude", "cwd": "/path/to/repo", "autoApprove": false}
-
-// Send a user message
-{"type": "user_message", "text": "Fix the bug in server.py"}
+// Send a user message (text and/or images)
+{"type": "user_message", "text": "Fix the bug", "images": [{"data": "base64...", "mimeType": "image/png"}]}
 
 // Cancel the current turn
 {"type": "cancel"}
+
+// Retry after auth failure
+{"type": "retry"}
 ```
 
 ### Server → Client
 
 ```json
-// Session established — historyLoaded tells the frontend whether history was replayed
-// (the backend already decided load vs new based on capabilities + session ID availability)
+// Session established
 {"type": "session_init", "sessionId": "sess_abc123", "agentInfo": {"name": "claude-code", ...},
  "historyLoaded": true}
 
-// Agent requires authentication before proceeding
+// Agent requires authentication
 {"type": "auth_required", "agentName": "claude-code",
- "message": "Claude Code requires authentication. Run 'claude auth login' in your terminal."}
+ "message": "Claude Code requires authentication."}
 
 // Forwarded ACP update (thin wrapper — unknown sessionUpdate types are passed through)
 {"type": "update", "sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "..."}}
@@ -290,377 +288,180 @@ The FastAPI server bridges between the browser WebSocket and the ACP agent subpr
 // Turn complete
 {"type": "turn_complete", "stopReason": "end_turn"}
 
+// Agent process died (detected by background monitor polling every 2s)
+{"type": "session_terminated"}
+
+// Session auto-restarted (when user sends a message after agent death)
+{"type": "session_restarted", "sessionId": "sess_new123"}
+
 // Error
 {"type": "error", "message": "Agent process crashed"}
 ```
 
-The server forwards ACP `session/update` params directly as WebSocket messages (adding `"type": "update"`). This keeps the backend thin — it doesn't interpret the ACP updates, just relays them.
+The server forwards ACP `session/update` params directly as WebSocket messages (adding `"type": "update"`). Tool call update content is truncated server-side (2000 chars max) to keep WebSocket payloads manageable.
 
 ### Session ID Mapping (Scanner ↔ ACP)
 
-The existing dashboard discovers sessions by scanning native log files (`~/.claude/projects/`, `~/.codex/sessions/`). Each `Session` object has a scanner-assigned `id` derived from the log file path (see `scanner.py`). ACP sessions have their own IDs assigned by the agent wrapper.
+The existing dashboard discovers sessions by scanning native log files (`~/.claude/projects/`, `~/.codex/sessions/`). ACP sessions have their own IDs assigned by the agent wrapper.
 
-These are **different ID spaces**. The mapping strategy:
+These are **different ID spaces**:
 
-- **Resuming a scanner session (PROTOTYPE ASSUMPTION — needs validation)**: The `start` message includes the scanner `sessionId`. The bridge passes this to `session/load` (if supported) or `session/new`. Whether the ACP wrappers accept native agent session IDs (e.g., Claude's JSONL-derived IDs) for `session/load` is **unverified**. The Claude ACP wrapper uses the Agent SDK internally, which may assign its own IDs that don't match the scanner's. This must be validated during Phase 1 prototyping. If the mapping doesn't work, the fallback is always a fresh `session/new` with the scanner summary shown as context.
+- **Resuming a scanner session**: The `start` message includes the scanner `sessionId`. The bridge passes this to `session/load` (if the agent supports `loadSession`) or falls back to `session/new`. If `session/load` fails, the bridge restarts the agent process and creates a fresh session.
+- **New sessions created via chat**: These get an ACP-assigned session ID. The agent writes its own log files, so the session appears in the scanner on next refresh.
+- **No ID registry needed**: The chat panel holds the ACP session ID in memory for the WebSocket lifetime. The scanner remains the source of truth for the session list.
 
-- **New sessions created via chat**: These get an ACP-assigned session ID. The agent writes its own log files (Claude Code writes JSONL to `~/.claude/projects/`), so the session will appear in the scanner on next refresh. The dashboard does NOT need to track ACP session IDs long-term — they're ephemeral to the chat panel lifetime.
-
-- **No ID registry needed**: The chat panel holds the ACP session ID in memory for the WebSocket lifetime. When the tab closes, the ID is discarded. The scanner remains the source of truth for the session list.
-
-- **Phase 1 validation task**: Before building the full resume flow, prototype `session/load` with a known Claude session ID and verify the ACP wrapper accepts it. If it doesn't, session resume degrades to "fresh session + summary context" for all agents, and `session/load` is only used for sessions originally created through the chat panel (where we control the ID).
-
-## Files to Modify
+## Files Modified
 
 | File | Change |
 |---|---|
-| `src/agent_kitchen/acp_bridge.py` | **New file**: ACP client that spawns agents and bridges to WebSocket |
-| `src/agent_kitchen/server.py` | Add `/ws/chat` endpoint that delegates to `acp_bridge` |
-| `src/agent_kitchen/static/chat.js` | **New file**: chat UI module (tabs, WebSocket, rendering, input) |
-| `src/agent_kitchen/static/index.html` | CDN deps (marked, highlight.js, DOMPurify), chat panel HTML |
-| `src/agent_kitchen/static/style.css` | Chat panel layout, bubble styles, markdown styles, tool cards |
-| `src/agent_kitchen/static/app.js` | View mode toggle, route session clicks to chat vs terminal |
-| `pyproject.toml` | Add `agent-client-protocol` dependency |
+| `src/agent_kitchen/acp_bridge.py` | ACP client that spawns agents and bridges to WebSocket (~270 lines) |
+| `src/agent_kitchen/server.py` | `/ws/chat` endpoint, `/api/agents` endpoint, `build_content_blocks()`, tool content truncation (~200 lines added) |
+| `src/agent_kitchen/static/chat.js` | Chat UI module: tabs, WebSocket, rendering, input, turn sidebar (~1050 lines) |
+| `src/agent_kitchen/static/index.html` | CDN deps (marked, highlight.js, DOMPurify), chat panel HTML, turn sidebar |
+| `src/agent_kitchen/static/style.css` | Chat panel layout, bubble styles, markdown styles, tool cards, turn sidebar, agent picker (~1200 lines of changes) |
+| `src/agent_kitchen/static/app.js` | Session routing to chat, agent picker dropdown, dashboard session event listeners (~380 lines of changes) |
+| `src/agent_kitchen/static/favicon.svg` | Layered flame icon |
+| `pyproject.toml` | `agent-client-protocol` dependency |
+| `tests/test_acp_lifecycle.py` | ACP bridge unit tests (mocked) |
+| `tests/test_chat.mjs` | Frontend JS unit tests (jsdom, Node test runner) |
+| `tests/test_image_paste.py` | Image content block building tests |
+| `tests/test_server.py` | Server endpoint tests |
 
-## Task Breakdown
+## What Was Built
 
-### Phase 1: Backend — ACP Bridge
+### Backend: ACP Bridge (`acp_bridge.py`)
 
-**1.0 — Validation spikes** (before committing to the full design)
+**`KitchenACPClient`** — ACP client callbacks:
+- `session_update()` — forwards updates to the WebSocket callback
+- `request_permission()` — auto-approves (selects first option) or denies all, based on `auto_approve` flag. Uses ACP's `RequestPermissionResponse` with `{outcome: "selected", optionId}` or `{outcome: "cancelled"}`
+- `read_text_file()` / `write_text_file()` — scoped to session cwd via path validation. Supports ACP slice params (line, limit) for partial reads. `write_text_file` creates parent directories as needed.
 
-Two assumptions must be validated before building the full implementation:
+**`ACPBridge`** — manages the agent subprocess lifecycle:
+- `start(session_id?)` — spawns agent, initializes ACP (10MB stdio buffer), creates or loads session. On `session/load` failure, restarts the entire agent process to avoid transport corruption.
+- `prompt(content_blocks)` — sends a user message with text and/or image blocks. Auto-restarts the bridge if the agent process has died.
+- `restart()` — closes the dead bridge and starts a new one, attempting to resume the session.
+- `cancel()` — cancels the current turn.
+- `close()` — terminates the agent process.
+- `is_alive` property — checks if the subprocess is still running.
 
-1. **Terminal capability**: Spawn Claude Code ACP wrapper without `terminal: true` in client capabilities. Send a prompt that requires command execution (e.g., "run `ls`"). Verify the agent can still execute commands. If it can't, we need to implement terminal callbacks or find a workaround.
+**Agent registry** — maps agent names to ACP spawn commands (claude, codex, copilot, gemini).
 
-2. **Session ID mapping**: Get a known Claude session ID from the scanner. Spawn the Claude ACP wrapper and attempt `session/load` with that ID. Verify whether the wrapper accepts native Claude session IDs or only its own internally-assigned IDs.
+### Backend: Server Additions (`server.py`)
 
-If (1) fails, terminal callback implementation becomes a required Phase 1 task. If (2) fails, session resume degrades to "fresh session + summary context" for scanner-discovered sessions.
+- **`/ws/chat`** — WebSocket endpoint that creates an `ACPBridge`, handles the start/retry/user_message/cancel message loop, and relays ACP updates to the browser.
+- **`/api/agents`** — returns the list of available agent types for the picker UI.
+- **`build_content_blocks()`** — converts WebSocket `user_message` payloads (text + images) into ACP content blocks. Skips malformed images gracefully.
+- **`_truncate_tool_content()`** — caps tool_call_update text at 2000 chars before WebSocket relay.
+- **Background process monitor** — polls `bridge.is_alive` every 2s and sends `session_terminated` when the agent dies.
 
-**1.1 — Add `agent-client-protocol` dependency** (`pyproject.toml`)
-- Add `"agent-client-protocol"` to dependencies
+### Frontend: Chat Module (`chat.js`)
 
-**1.2 — Create `acp_bridge.py`** (new file, ~150 lines)
+**Tab management**: Multiple concurrent chat sessions with tab switching. Each tab holds its own WebSocket, session state, message history DOM, streaming accumulators, pending images, and message queue.
 
-Core class: `ACPBridge` — manages an ACP agent subprocess lifecycle and bridges updates to a callback.
+**WebSocket + message routing**: Connects to `/ws/chat`, sends `start` with agent/cwd/sessionId, routes incoming messages by type (`session_init`, `update`, `turn_complete`, `error`, `auth_required`, `session_terminated`, `session_restarted`). Update messages are further routed by `sessionUpdate` type.
 
-```python
-class ACPBridge:
-    """Bridges an ACP agent subprocess to a WebSocket callback."""
-    
-    def __init__(self, agent_command: list[str], cwd: str, on_update: Callable,
-                 auto_approve: bool = False):
-        self._cwd = Path(cwd).resolve()
-        self._auto_approve = auto_approve
-        self._agent_caps = {}  # populated after initialize
-        ...
-    
-    async def start(self, session_id: str | None = None) -> dict:
-        """Spawn agent, initialize, create/load session.
-        
-        Returns {"sessionId": str, "capabilities": dict, "agentInfo": dict}.
-        Raises AuthRequiredError if agent needs authentication.
-        """
-        # 1. acp.spawn_agent_process(client, *agent_command)
-        # 2. conn.initialize(...) — advertise only fs capabilities, NOT terminal
-        # 3. Store agent_caps from response (loadSession, etc.)
-        # 4. If session_id and agent_caps.loadSession:
-        #        conn.load_session(sessionId=session_id, cwd=cwd)
-        #    elif session_id:
-        #        conn.new_session(cwd=cwd)  # fallback: fresh session, no history
-        #    else:
-        #        conn.new_session(cwd=cwd)
-        # 5. If session/new fails with auth error: raise AuthRequiredError
-    
-    @property
-    def can_load_session(self) -> bool:
-        return self._agent_caps.get("loadSession", False)
-    
-    async def prompt(self, text: str) -> str:
-        """Send user message, stream updates via on_update callback. Returns stop_reason."""
-    
-    async def cancel(self):
-        """Cancel current turn."""
-    
-    async def close(self):
-        """Terminate agent process."""
-```
+**Rendering**:
+- User bubbles with optional inline image thumbnails, preserved newlines via `white-space: pre-wrap`
+- Streaming assistant text with markdown rendering via `marked` + `highlight.js`, sanitized through `DOMPurify`, throttled via `requestAnimationFrame`
+- Collapsible thinking blocks (`<details>` elements)
+- Tool call cards with kind-based icons, status badges (pending/in_progress/completed/failed), file location display, expandable body with output or diff content
+- Automatic tool collapsing: runs of 3+ consecutive completed tool cards are grouped into a `<details>` summary
+- Plan rendering as a checklist with status icons
+- Usage/cost display in panel header with context window percentage and warning colors (75% yellow, 90% red)
+- System messages, info banners, auth banners with retry buttons, session termination notices
 
-The `on_update` callback is called for every `session/update` notification. It receives the raw update dict — the WebSocket handler wraps it and sends to browser.
-
-ACP Client implementation (passed to `spawn_agent_process`):
-
-```python
-class KitchenACPClient(acp.Client):
-    """ACP client callbacks for Agent Kitchen.
-    
-    FS access is scoped to the session's cwd to prevent out-of-repo writes.
-    Terminal callbacks are NOT implemented — we don't advertise terminal
-    capability, so agents won't call these methods.
-    """
-    
-    def __init__(self, on_update: Callable, cwd: Path, auto_approve: bool = False):
-        self._on_update = on_update
-        self._cwd = cwd.resolve()
-        self._auto_approve = auto_approve
-    
-    def _validate_path(self, path: str) -> Path:
-        """Ensure path is under cwd. Raises ValueError if not."""
-        resolved = Path(path).resolve()
-        if not resolved.is_relative_to(self._cwd):
-            raise ValueError(f"Path {path} is outside session root {self._cwd}")
-        return resolved
-    
-    async def session_update(self, session_id, update, **kwargs):
-        await self._on_update(session_id, update)
-    
-    async def request_permission(self, options, session_id, tool_call, **kwargs):
-        """Handle permission requests from the agent.
-        
-        ACP permission responses use RequestPermissionOutcome:
-          - {"outcome": "selected", "optionId": "<id>"}  — approve a specific option
-          - {"outcome": "cancelled"}                      — deny/cancel
-        
-        When auto_approve is True, selects the first option by its optionId
-        (matching --dangerously-skip-permissions behavior). When False,
-        always cancels.
-        """
-        if self._auto_approve and options:
-            return {"outcome": "selected", "optionId": options[0].get("optionId")}
-        else:
-            return {"outcome": "cancelled"}
-    
-    async def read_text_file(self, path, line=None, limit=None, **kwargs):
-        """Read a file, scoped to session cwd. Supports ACP slice params."""
-        validated = self._validate_path(path)
-        text = validated.read_text()
-        if line is not None:
-            lines = text.splitlines(keepends=True)
-            start = max(0, line - 1)  # ACP lines are 1-indexed
-            end = start + limit if limit else len(lines)
-            text = "".join(lines[start:end])
-        return {"content": text}
-    
-    async def write_text_file(self, path, content, **kwargs):
-        """Write a file, scoped to session cwd."""
-        validated = self._validate_path(path)
-        validated.write_text(content)
-    
-    # Terminal callbacks intentionally not implemented.
-    # We don't advertise terminal capability in initialize,
-    # so compliant agents won't call these.
-```
-
-**Permission model**: Auto-approve defaults to **true** because Agent Kitchen is a local dashboard for the user's own machine — denying tool calls blocks normal coding agent functionality. The WebSocket `start` message includes an `"autoApprove": true/false` flag. The dashboard UI shows a lock icon toggle to switch to restrictive mode (deny all), which is useful for read-only observation or untrusted agents. Interactive per-tool approval (prompting the user in the browser for each permission request) is deferred to a future iteration.
-
-**1.3 — Agent registry** (in `acp_bridge.py`, ~20 lines)
-
-Map agent names to their ACP spawn commands:
-
-```python
-AGENT_COMMANDS = {
-    "claude": ["npx", "@agentclientprotocol/claude-agent-acp"],
-    "codex": ["npx", "@zed-industries/codex-acp"],
-    "copilot": ["npx", "@github/copilot-language-server", "--acp"],
-    "gemini": ["npx", "@google/gemini-cli", "--experimental-acp"],
-}
-```
-
-**1.4 — `/ws/chat` WebSocket endpoint** (`server.py`, ~80 lines)
-- Accept WebSocket, wait for `start` message (extract `agent`, `cwd`, optional `sessionId`, `autoApprove`)
-- Create `ACPBridge` with the agent command, cwd, on_update callback, and auto_approve flag
-- Call `bridge.start()`:
-  - On success → send `session_init` (includes `capabilities` from agent) to client
-  - On `AuthRequiredError` → send `auth_required` with agent name and instructions
-- On `user_message`: call `bridge.prompt(text)` → updates stream via callback → send `turn_complete`
-- On `cancel`: call `bridge.cancel()`
-- On `retry` (after auth): re-attempt `bridge.start()`
-- Cleanup: `bridge.close()` on disconnect
-
-### Phase 2: Frontend HTML
-
-**2.1 — CDN dependencies** (`index.html`)
-- `marked` (~30KB) — markdown rendering
-- `highlight.js` core + python/js/ts/bash/json/css/xml (~50KB gzipped) — syntax highlighting
-- `DOMPurify` — XSS protection
-
-**2.2 — Chat panel HTML** (`index.html`)
-```html
-<div id="chat-panel" class="chat-panel hidden">
-  <div class="chat-panel-header">
-    <div class="chat-tabs" id="chat-tabs"></div>
-    <div class="chat-panel-controls">
-      <span class="chat-cost" id="chat-cost"></span>
-      <button class="view-toggle" id="view-toggle" title="Switch to terminal view">TTY</button>
-      <button class="chat-panel-close" id="chat-close">&times;</button>
-    </div>
-  </div>
-  <div class="chat-messages" id="chat-messages"></div>
-  <div class="chat-input-bar">
-    <textarea id="chat-input" class="chat-input" placeholder="Send a message..." rows="1"></textarea>
-    <button id="chat-send" class="chat-send-btn">↑</button>
-  </div>
-</div>
-```
-
-### Phase 3: Chat Module (`chat.js`)
-
-**3.1 — Tab management** (~100 lines)
-- `createChatTab(title, agent, cwd, existingSessionId)`
-- `switchChatTab(tabId)`, `closeChatTab(tabId)`, `renderChatTabs()`
-- Tab data shape:
-  ```
-  {id, ws, sessionId, agent, cwd, container, title, 
-   streaming, currentTextAccum, currentTextEl, thinkingEl, thinkingAccum}
-  ```
-
-**3.2 — WebSocket + message routing** (~120 lines)
-- `connectWebSocket(tabData)` — connect to `/ws/chat`, send `start` with agent + cwd
-- `sendUserMessage(tabId, text)` — add user bubble, send `user_message`
-- `handleServerMessage(tabId, msg)` — route by `msg.type`:
-  - `session_init` → store sessionId, show agent info
-  - `update` → route by `msg.sessionUpdate` (see mapping table above)
-  - `turn_complete` → finalize, re-enable input
-  - `error` → show error in chat
-
-**3.3 — Rendering** (~200 lines)
-
-- `renderUserBubble(text)` — user message div
-- `renderAgentTextChunk(tabData, text)` — append to streaming text accumulator, schedule markdown re-render via `requestAnimationFrame`
-- `renderThinkingChunk(tabData, text)` — append to collapsible "thinking" block
-- `renderToolCall(tabData, toolCall)` — create collapsible card:
-  - Header: icon by `kind` (read/edit/execute/search), title, status badge, file locations
-  - Body (collapsed): rawInput JSON
-- `updateToolCall(tabData, update)` — find card by `toolCallId`, update status, append content/diffs
-- `renderDiff(path, oldText, newText)` — inline diff view for edit tool calls
-- `renderPlan(entries)` — checklist of plan entries with status icons
-- `renderUsage(cost, used, size)` — cost badge in panel header
-- `finalizeAssistantMessage(tabData)` — clean final markdown render after turn completes
-- `scrollToBottom(container)`
-
-Markdown rendering approach:
-- Configure `marked` with `highlight.js` for code blocks
-- All output through `DOMPurify.sanitize()` before DOM insertion
-- During streaming: accumulate text, re-render via `requestAnimationFrame` (max 1 render/frame)
-- After turn complete: one final clean render pass
-
-**3.4 — Input handling** (~50 lines)
-- Auto-growing textarea (adjust rows on input)
+**Input handling**:
+- Auto-growing textarea (up to 150px)
 - Enter to send, Shift+Enter for newline
-- Disable input + show spinner while streaming
-- Cancel button appears during streaming
+- Esc to cancel during streaming
+- Stop button appears during streaming (replaces send button)
+- Message queueing: users can type and send messages while the agent is working — queued messages are flushed sequentially after each turn completes
+- Image paste: clipboard images are added as pending attachments with thumbnail previews and remove buttons
 
-**3.5 — Public API** (~30 lines)
-- `window.AgentChat = { openChat(session), openNewChat(cwd) }`
+**Turn navigation sidebar**:
+- Lists all user turns with numbered labels and text previews
+- Click to scroll to a turn with highlight animation
+- Ctrl+Up/Down keyboard shortcuts for sequential navigation
+- Ctrl+T to toggle sidebar visibility
+- Counter shows current/total turns
 
-### Phase 4: Integration (`app.js`)
+**Session lifecycle**:
+- Death detection via `session_terminated` message from the server monitor
+- "Session ended — send a message to resume" notice
+- Auto-restart on next user message (bridge restarts, sends `session_restarted`)
+- Auth flow: `auth_required` banner with retry button
 
-**4.1 — View mode toggle + routing**
-- `localStorage` preference: `"chat"` (default) or `"terminal"`
-- Modify `launchSession(session)`:
-  - Chat mode → `AgentChat.openChat(session)`
-  - Terminal mode → existing `openTerminal(session)` 
-- Modify `openNewSession(cwd)`:
-  - Chat mode → `AgentChat.openNewChat(cwd)` — agent is determined by chat module (see below)
-  - Terminal mode → existing behavior
-- View toggle button switches panels and saves preference
-- Note: `openNewSession()` at `app.js:624` only has `cwd` in scope — it does not have access to `session.source`. The agent selection is handled by the chat module, not the caller.
+**Public API**:
+- `window.AgentChat.openChat(session)` — open or switch to a tab for an existing session
+- `window.AgentChat.openNewChat(cwd, agent)` — open a new session tab
+- `window.AgentChat.getActiveSessionIds()` — set of session IDs with open tabs
+- `window.AgentChat.getActiveSessions()` — info about active tabs (streaming state, agent, cwd)
 
-**4.2 — Agent selector for new sessions**
-- `AgentChat.openNewChat(cwd)` shows an agent picker dropdown (claude/codex/copilot/gemini) in the chat panel header
-- Default agent is read from `localStorage` (last used agent), with "claude" as initial default
-- The repo group header's "+" button calls `openNewSession(cwd)`, which delegates to `AgentChat.openNewChat(cwd)` — the agent picker is internal to the chat module
+**Custom events** emitted on `window`:
+- `agent-session-started` — when a session initializes
+- `agent-session-updated` — when streaming state changes
+- `agent-session-closed` — when a tab is closed
 
-### Phase 5: CSS (`style.css`)
+### Frontend: Dashboard Integration (`app.js`)
 
-**5.1 — Chat panel layout** (~60 lines)
-- Same positioning as terminal panel (fixed bottom, 50vh, resizable)
-- Messages: scrollable, flex column, padding
-- Input bar: flex row, fixed at bottom
+- Session clicks route to `AgentChat.openChat(session)` (chat is the default view)
+- "+" buttons on repo group headers show an **agent picker dropdown** listing available agents from `/api/agents`. If only one agent is available, the picker is skipped.
+- Default agent is persisted in `localStorage` (last used)
+- Dashboard listens for `agent-session-started/updated/closed` custom events and updates session rows with live status indicators (streaming dots)
 
-**5.2 — Chat content styles** (~150 lines)
-- User bubble: right-aligned, accent (#FF4D00) background, white text
-- Assistant bubble: left-aligned, dark surface (#1a1a1a) background
-- Thinking block: collapsible, dim italic text, border-left accent
-- Markdown: headings, code blocks (dark bg, syntax highlighted), tables, lists, blockquotes, inline code
-- Tool call cards:
-  - Collapsed header: icon + title + status badge + file path
-  - Expanded body: rawInput, content, diff view
-  - Status colors: pending (gray), in_progress (orange pulse), completed (green), failed (red)
-- Streaming cursor: blinking block animation after current text
-- Plan checklist: entries with status icons (pending/completed/failed)
-- Cost badge: monospace, dim, in panel header
+### Frontend: UI Polish (`style.css`)
 
-**5.3 — View toggle + agent selector** (~20 lines)
+The branch includes significant visual polish beyond the chat panel:
+- Card-based layout for repo groups with elevated shadows and rounded corners
+- Monochrome theme with orange accent (#FF4D00)
+- Status pills with colored dots and pulse animation for active sessions
+- Display font (Archivo Black) for repo group headers
+- Typography scale via CSS variables
+- Segmented time filter buttons (replacing a slider)
+- Command-palette search overlay with backdrop blur
+- Dark mode via `.dark` class on `<html>`, toggled by `d` key cycling auto/dark/light
+- SVG favicon (layered flame icon)
+- Responsive chat panel width
 
-### Phase 6: Polish
+## Deviations from Original Design
 
-**6.1 — Error handling**
-- Agent process crash → show error in chat, offer restart
-- WebSocket disconnect → show reconnect prompt
-- ACP initialization failure → show friendly error with agent name
+1. **View toggle button removed**: The design called for a TTY/Chat toggle button. This was implemented then removed (commit `57eb516`) — the chat panel and terminal panel are independent, accessible via different session interaction paths.
 
-**6.2 — Cancel**
-- Cancel button during streaming → sends `cancel` → agent receives `session/cancel`
-- Show "cancelled" indicator on partial response
+2. **Auto-approve UI toggle not implemented**: The design specified a lock icon toggle for switching between auto-approve and restrictive mode. The `autoApprove` flag exists in the WebSocket protocol and bridge, but there's no UI control for it. Auto-approve defaults to true.
 
-**6.3 — XSS safety**
-- All `marked.parse()` output through `DOMPurify.sanitize()`
-- Tool call rawInput/rawOutput displayed as `<pre>` with text content (not innerHTML)
-- File paths displayed as text nodes
+3. **Agent picker is a positioned dropdown, not in-chat**: The design placed agent selection inside the chat panel header. The implementation uses a positioned dropdown anchored to the "+" button in repo group headers, populated from `/api/agents`.
 
-**6.4 — Session history on resume**
-- The backend decides whether to use `session/load` or `session/new` based on agent capabilities and session ID
-- The `session_init` WebSocket message includes `"historyLoaded": true/false` — an explicit result flag
-- If `historyLoaded: true`: history was replayed as `user_message_chunk`/`agent_message_chunk`/`tool_call` updates before `session_init` — the frontend already rendered them
-- If `historyLoaded: false`: frontend shows info banner with scanner summary ("This session was about: {summary}") above the empty chat
+4. **Turn navigation sidebar added**: Not in the original design. Provides numbered turn list, click-to-scroll, keyboard shortcuts (Ctrl+Up/Down/T).
 
-**6.5 — Authentication flow**
-- Handle `auth_required` WebSocket message
-- Show banner in chat panel: "Agent requires authentication" with instructions
-- Provide a "Retry" button that re-sends the `start` message
-- Show agent-specific auth instructions (e.g., "Run `claude auth login` in your terminal")
+5. **Image paste support added**: Not in the original design. Users can paste clipboard images into the chat input. Images appear as thumbnails in a preview strip below the messages and are sent as ACP image content blocks.
 
-## Implementation Order
+6. **Message queueing added**: Not in the original design. Users can type and send messages while the agent is working. Messages are queued and flushed after each turn completes.
 
-1. **Phase 1** (backend): validation spikes first (terminal capability, session ID mapping), then `pyproject.toml` dep, `acp_bridge.py`, `/ws/chat` endpoint
-2. **Phase 2** (HTML): CDN deps, chat panel scaffold
-3. **Phase 3.1-3.2** (chat core): tabs, WebSocket, message routing
-4. **Phase 5.1** (layout CSS): make panel visible
-5. **Phase 3.3** (rendering): markdown, tool cards, streaming — the core UX
-6. **Phase 5.2** (content CSS): make it beautiful
-7. **Phase 3.4-3.5** (input + API): complete interaction loop
-8. **Phase 4** (integration): wire session clicks, view toggle
-9. **Phase 6** (polish): errors, cancel, XSS, session history
+7. **Tool collapsing added**: Not in the original design. Runs of 3+ consecutive completed tool cards are automatically grouped into a collapsible `<details>` summary.
 
-## Verification
+8. **10MB stdio buffer**: The ACP spawn uses a 10MB stdio buffer (up from the default 64KB) to handle large file reads by agents.
 
-1. `uv run pytest` — existing tests pass
-2. `uvx agent-kitchen web` — start dashboard
-3. Click a Claude session → chat panel opens, history loads if agent supports `loadSession`
-4. Click a session from an agent without `loadSession` → info banner shown, fresh session starts
-5. Send a message → streaming markdown response with thinking blocks
-6. Ask Claude to edit a file → tool call card with diff view
-7. Agent cannot write outside session cwd → `ValueError` raised, error shown in chat
-8. Send follow-up → multi-turn works
-9. Open new session, select Codex → Codex agent responds in same UI
-10. Toggle to TTY → xterm.js terminal still works
-11. Click cancel during streaming → turn cancelled cleanly
-12. Cost badge updates if agent emits `usage_update`, stays hidden otherwise
-13. Default mode (autoApprove: true) → agent tool calls proceed normally
-14. Lock icon toggle (autoApprove: false) → agent tool calls are cancelled (permissions denied)
-15. Agent with expired auth → `auth_required` message shown, retry works after re-auth
+9. **Session/load failure recovery**: On `session/load` failure, the bridge restarts the entire agent process to avoid transport corruption, then creates a fresh session. The original design only mentioned falling back to `session/new`.
+
+10. **Dashboard session events**: The chat module emits custom DOM events that the dashboard listens to for live status updates (streaming indicators on session rows). Not in the original design.
 
 ## Key Design Decisions
 
 - **ACP over proprietary formats**: ACP is supported by Claude Code, Codex, Copilot, Gemini, and others. One protocol, any agent. The Python SDK (`agent-client-protocol`) handles JSON-RPC 2.0 framing.
-- **Graceful capability degradation**: ACP capabilities like `loadSession` are optional. The bridge checks what each agent supports and falls back cleanly (e.g., fresh session instead of history replay). Unknown `sessionUpdate` types and extension events like `usage_update` are rendered when present, ignored when absent.
-- **Persistent agent process**: Unlike the earlier per-turn subprocess design, ACP keeps the agent process alive across turns. `session/prompt` is called multiple times on the same connection. Simpler, no startup overhead per turn.
-- **Scoped FS access**: `read_text_file` and `write_text_file` callbacks validate that all paths resolve under the session's `cwd`. Out-of-repo access is rejected with an error. This is a meaningful safety boundary for a browser-triggered client.
-- **Auto-approve with opt-out**: Auto-approve defaults to on — Agent Kitchen is a local dashboard and denying all tool calls blocks normal agent functionality. A lock icon toggle switches to restrictive mode (deny all). ACP permissions use `RequestPermissionOutcome` with `{outcome: "selected", optionId}` or `{outcome: "cancelled"}`. Interactive per-tool approval in the browser is deferred to a future iteration.
-- **No terminal capability (risk)**: Agent Kitchen does not advertise `terminal: true` in the ACP handshake and does not implement terminal callbacks. This avoids a large implementation surface, but may cause agents to degrade if they depend on client-side terminal management for command execution. Must be validated in Phase 1.
-- **Delegated authentication**: Auth is handled by each agent's own CLI, not via ACP's `authenticate` method. This assumes ACP wrappers share credential stores with their CLIs — verified for Claude/Codex, unverified for others. If an agent needs auth, the chat panel shows instructions and a retry button.
-- **Scanner remains source of truth**: ACP session IDs are ephemeral to the chat panel. The scanner's native log file parsing remains the authoritative session list. New sessions created via chat appear in the scanner on next refresh because agents write their own log files.
-- **Session resume is a prototype assumption**: Whether ACP wrappers accept native agent session IDs (from the scanner) for `session/load` is unverified. Phase 1 must validate this before the resume flow is built. Fallback is always "fresh session + scanner summary as context."
-- **Backend as thin relay**: Server forwards ACP updates to WebSocket without deep interpretation. Resilient to protocol evolution.
-- **`requestAnimationFrame` for streaming**: Markdown re-rendered at most once per frame to avoid jank.
-- **DOMPurify**: Tool results contain arbitrary file contents. All rendered HTML must be sanitized.
+- **Graceful capability degradation**: ACP capabilities like `loadSession` are optional. The bridge checks what each agent supports and falls back cleanly. Unknown `sessionUpdate` types are logged and ignored.
+- **Persistent agent process**: ACP keeps the agent process alive across turns. `session/prompt` is called multiple times on the same connection.
+- **Scoped FS access**: `read_text_file` and `write_text_file` callbacks validate that all paths resolve under the session's `cwd`. Out-of-repo access is rejected with a `ValueError`.
+- **Auto-approve by default**: Agent Kitchen is a local dashboard — denying tool calls blocks normal agent functionality. ACP permissions use `RequestPermissionResponse` with `{outcome: "selected", optionId}` or `{outcome: "cancelled"}`.
+- **No terminal capability**: Agent Kitchen does not advertise `terminal: true` in the ACP handshake. This avoids ~5 terminal lifecycle callbacks but may cause agents to degrade if they depend on client-side terminal management.
+- **Delegated authentication**: Auth is handled by each agent's own CLI, not via ACP's `authenticate` method.
+- **Scanner remains source of truth**: ACP session IDs are ephemeral to the chat panel. The scanner's native log file parsing remains the authoritative session list.
+- **Backend as thin relay**: Server forwards ACP updates to WebSocket without deep interpretation. Tool content is truncated server-side (2000 char cap) to keep payloads manageable.
+- **`requestAnimationFrame` for streaming**: Markdown re-rendered at most once per frame to avoid jank during fast token streaming.
+- **DOMPurify**: All rendered HTML from markdown and tool results is sanitized before DOM insertion.
+
+## Test Coverage
+
+- **`tests/test_acp_lifecycle.py`** (10 tests): Bridge lifecycle, start/prompt/cancel/close, auth flow, session load fallback, process death detection and restart, permission handling.
+- **`tests/test_chat.mjs`** (26 tests, 8 suites): Tab management, message routing, streaming text accumulation, tool call rendering and updating, tool collapsing, user message building, turn tracking, session init handling, turn_complete finalization.
+- **`tests/test_image_paste.py`** (8 tests): `build_content_blocks()` with text, images, text+images, malformed images, empty inputs.
+- **`tests/test_server.py`** (54 tests): Server endpoints including the new `/api/agents` and chat WebSocket.
