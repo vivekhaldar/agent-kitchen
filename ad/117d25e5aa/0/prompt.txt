@@ -1,0 +1,9 @@
+the summary block with dates isn't really serving a purpose. can you replace it with a prose paragraph, with hyperlinks to the relevant sessions. when the links are clicked, it should resume that session. the prose should reflect the time window selected at the top
+
+---
+
+commit and push all this
+
+---
+
+nice... anything left uncomitted?
