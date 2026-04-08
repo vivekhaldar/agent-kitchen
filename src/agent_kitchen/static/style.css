@@ -1749,107 +1749,75 @@ body.chat-open .content {
 
 /* ===== Dark Mode ===== */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-primary: #0e0e0e;
-    --bg-secondary: #181818;
-    --bg-hover: #222222;
-    --bg-surface: #1e1e1e;
+/* ===== Dark Mode ===== */
+/*
+ * Theme is controlled by JS adding .dark to <html>.
+ * JS sets .dark based on: localStorage preference, OS media query, or toggle.
+ * Variables and component overrides both use the single .dark selector.
+ */
 
-    --text-primary: #EEEEEE;
-    --text-secondary: #BBBBBB;
-    --text-muted: #777777;
+html.dark {
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #181818;
+  --bg-hover: #222222;
+  --bg-surface: #1e1e1e;
 
-    --border: #2e2e2e;
-    --border-light: #252525;
+  --text-primary: #EEEEEE;
+  --text-secondary: #BBBBBB;
+  --text-muted: #777777;
 
-    --accent-dim: rgba(255, 77, 0, 0.15);
+  --border: #2e2e2e;
+  --border-light: #252525;
 
-    --bg-code: #0a0a0a;
-    --border-code: #2e2e2e;
-    --bg-code-inline: rgba(255, 255, 255, 0.08);
-    --bg-table-header: rgba(255, 255, 255, 0.05);
-    --border-table: #444444;
+  --accent-dim: rgba(255, 77, 0, 0.15);
 
-    --status-done: #888888;
-    --status-likely-done: #666666;
+  --bg-code: #0a0a0a;
+  --border-code: #2e2e2e;
+  --bg-code-inline: rgba(255, 255, 255, 0.08);
+  --bg-table-header: rgba(255, 255, 255, 0.05);
+  --border-table: #444444;
 
-    --badge-claude: #DDDDDD;
-    --badge-codex: #AAAAAA;
-  }
+  --status-done: #888888;
+  --status-likely-done: #666666;
 
-  .header {
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
-    border-bottom-color: #222;
-  }
+  --badge-claude: #DDDDDD;
+  --badge-codex: #AAAAAA;
+}
 
-  .repo-group {
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  }
+html.dark .header { box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); border-bottom-color: #222; }
+html.dark .repo-group { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2); }
+html.dark .repo-group:hover { box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3); }
+html.dark .status-label.done { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.08); }
+html.dark .status-label.likely-done { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.06); }
+html.dark .status-label.waiting-for-input { color: #ffd700; background: rgba(255, 215, 0, 0.15); }
+html.dark .search-overlay { background: rgba(0, 0, 0, 0.6); }
+html.dark .search-box { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05); }
+html.dark .source-badge { border-color: var(--border); }
+html.dark .time-seg.active { background: var(--text-primary); color: var(--bg-secondary); }
+html.dark .search-hint-bar { background: var(--bg-surface); border-color: var(--border); }
+html.dark .search-hint-bar kbd { background: var(--bg-primary); border-color: var(--border); }
+html.dark .chat-bubble.user { box-shadow: 0 1px 4px rgba(255, 77, 0, 0.15); }
+html.dark .chat-bubble.assistant { border-color: var(--border); }
+html.dark .meta-sep { color: #444; }
+html.dark .repo-meta-line .dirty { color: #fc8181; }
+html.dark .repo-meta-line .clean { color: #68d391; }
 
-  .repo-group:hover {
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  }
+/* Theme indicator in header */
+.theme-toggle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 
-  .status-label.done {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .status-label.likely-done {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.06);
-  }
-
-  .status-label.waiting-for-input {
-    color: #ffd700;
-    background: rgba(255, 215, 0, 0.15);
-  }
-
-  .search-overlay {
-    background: rgba(0, 0, 0, 0.6);
-  }
-
-  .search-box {
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  }
-
-  .source-badge {
-    border-color: var(--border);
-  }
-
-  .time-seg.active {
-    background: var(--text-primary);
-    color: var(--bg-secondary);
-  }
-
-  .search-hint-bar {
-    background: var(--bg-surface);
-    border-color: var(--border);
-  }
-
-  .search-hint-bar kbd {
-    background: var(--bg-primary);
-    border-color: var(--border);
-  }
-
-  .chat-bubble.user {
-    box-shadow: 0 1px 4px rgba(255, 77, 0, 0.15);
-  }
-
-  .chat-bubble.assistant {
-    border-color: var(--border);
-  }
-
-  .meta-sep {
-    color: #444;
-  }
-
-  .repo-meta-line .dirty {
-    color: #fc8181;
-  }
-
-  .repo-meta-line .clean {
-    color: #68d391;
-  }
+.theme-toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-muted);
 }

@@ -4,6 +4,42 @@
 (function () {
   "use strict";
 
+  // --- Theme ---
+  // Cycles: auto → dark → light → auto. Persisted in localStorage.
+  // JS manages the .dark class on <html> based on effective theme.
+
+  var THEME_CYCLE = ["auto", "dark", "light"];
+  var THEME_LABELS = { auto: "Auto", dark: "Dark", light: "Light" };
+  var $themeToggle = document.getElementById("theme-toggle");
+  var darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function getStoredTheme() {
+    return localStorage.getItem("ak-theme") || "auto";
+  }
+
+  function applyTheme(theme) {
+    var isDark = theme === "dark" || (theme === "auto" && darkMediaQuery.matches);
+    document.documentElement.classList.toggle("dark", isDark);
+    $themeToggle.textContent = THEME_LABELS[theme];
+  }
+
+  function cycleTheme() {
+    var current = getStoredTheme();
+    var next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+    localStorage.setItem("ak-theme", next);
+    applyTheme(next);
+  }
+
+  // Apply on load
+  applyTheme(getStoredTheme());
+
+  // React to OS theme changes (only matters in auto mode)
+  darkMediaQuery.addEventListener("change", function () {
+    if (getStoredTheme() === "auto") applyTheme("auto");
+  });
+
+  $themeToggle.addEventListener("click", cycleTheme);
+
   // --- State ---
   let dashboardData = null;
   let lastScannedTime = null;
@@ -886,6 +922,9 @@
     } else if (e.key === "r") {
       e.preventDefault();
       refreshSessions();
+    } else if (e.key === "d") {
+      e.preventDefault();
+      cycleTheme();
     } else if (e.key === "j") {
       e.preventDefault();
       var groups = getAllGroupElements();
