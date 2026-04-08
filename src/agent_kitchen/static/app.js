@@ -300,17 +300,17 @@
 
   function renderRepoGroup(group, filteredSessions) {
     var metaParts = [];
-    if (group.git_branch) metaParts.push(group.git_branch);
+    if (group.git_branch) metaParts.push('<span class="meta-branch">' + escapeHtml(group.git_branch) + '</span>');
     if (group.git_dirty) metaParts.push('<span class="dirty">dirty</span>');
     if (group.unpushed_commits > 0) metaParts.push('<span class="unpushed">' + group.unpushed_commits + " unpushed</span>");
-    if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push("clean");
-    metaParts.push(filteredSessions.length + " sessions");
+    if (!group.git_dirty && group.unpushed_commits === 0) metaParts.push('<span class="clean">clean</span>');
+    metaParts.push('<span class="meta-count">' + filteredSessions.length + " session" + (filteredSessions.length !== 1 ? "s" : "") + '</span>');
 
     return renderGroup({
       groupKey: group.repo_root,
       displayName: group.repo_name,
       icon: OCTOCAT_SVG,
-      metaText: metaParts.join(", "),
+      metaText: metaParts.join('<span class="meta-sep">\u00b7</span>'),
       cwd: group.repo_root,
       lastActive: group.last_active,
       timeline: group.timeline,
@@ -324,7 +324,7 @@
       groupKey: group.cwd,
       displayName: displayName,
       icon: "",
-      metaText: filteredSessions.length + " sessions",
+      metaText: '<span class="meta-count">' + filteredSessions.length + " session" + (filteredSessions.length !== 1 ? "s" : "") + '</span>',
       cwd: group.cwd,
       lastActive: group.last_active,
       timeline: group.timeline,
