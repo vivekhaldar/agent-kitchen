@@ -1,0 +1,1 @@
+why is the input text box not editable while the agent is working? i should be able to queue up messages
