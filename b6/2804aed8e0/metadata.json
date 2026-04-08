@@ -3,7 +3,7 @@
   "checkpoint_id": "b62804aed8e0",
   "strategy": "manual-commit",
   "branch": "feature/rich-chat-view",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     ".gitignore",
     "IMPROVEMENT_REPORT.md"
@@ -14,13 +14,19 @@
       "transcript": "/b6/2804aed8e0/0/full.jsonl",
       "content_hash": "/b6/2804aed8e0/0/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/b6/2804aed8e0/1/metadata.json",
+      "transcript": "/b6/2804aed8e0/1/full.jsonl",
+      "content_hash": "/b6/2804aed8e0/1/content_hash.txt",
+      "prompt": "/b6/2804aed8e0/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1,
-    "cache_creation_tokens": 443,
-    "cache_read_tokens": 60210,
-    "output_tokens": 121,
-    "api_call_count": 1
+    "input_tokens": 331,
+    "cache_creation_tokens": 1702764,
+    "cache_read_tokens": 30666805,
+    "output_tokens": 76491,
+    "api_call_count": 286
   }
 }
