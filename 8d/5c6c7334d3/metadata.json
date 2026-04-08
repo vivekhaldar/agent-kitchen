@@ -5,6 +5,8 @@
   "branch": "feature/ui-polish",
   "checkpoints_count": 1,
   "files_touched": [
+    "src/agent_kitchen/static/app.js",
+    "src/agent_kitchen/static/index.html",
     "src/agent_kitchen/static/style.css"
   ],
   "sessions": [
@@ -13,13 +15,19 @@
       "transcript": "/8d/5c6c7334d3/0/full.jsonl",
       "content_hash": "/8d/5c6c7334d3/0/content_hash.txt",
       "prompt": "/8d/5c6c7334d3/0/prompt.txt"
+    },
+    {
+      "metadata": "/8d/5c6c7334d3/1/metadata.json",
+      "transcript": "/8d/5c6c7334d3/1/full.jsonl",
+      "content_hash": "/8d/5c6c7334d3/1/content_hash.txt",
+      "prompt": "/8d/5c6c7334d3/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 330,
-    "cache_creation_tokens": 1702321,
-    "cache_read_tokens": 30606595,
-    "output_tokens": 76370,
-    "api_call_count": 285
+    "input_tokens": 384,
+    "cache_creation_tokens": 1777770,
+    "cache_read_tokens": 33830387,
+    "output_tokens": 92275,
+    "api_call_count": 333
   }
 }

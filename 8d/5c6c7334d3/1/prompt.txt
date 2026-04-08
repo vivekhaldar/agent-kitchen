@@ -1,0 +1,5 @@
+if you were to use your frontend skill to really spiff up the ui of agent kitchen (it currently looks like this -- ) -- what would you do? (just tell me first, don't implement anything yet)
+
+---
+
+ok sounds good. first push this branch. then implement the above in a new branch split off this current branch.
