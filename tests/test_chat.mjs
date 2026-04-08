@@ -42,6 +42,7 @@ function createChatEnv() {
       <div class="chat-input-bar">
         <textarea id="chat-input" class="chat-input" rows="1"></textarea>
         <button id="chat-send" class="chat-send-btn">&uarr;</button>
+        <button id="chat-stop" class="chat-stop-btn hidden">&square;</button>
       </div>
     </div>
   </body></html>`;
@@ -404,7 +405,7 @@ describe("tab switching isolates state", () => {
 
     const input = win.document.getElementById("chat-input");
     assert.equal(input.disabled, false, "Input should stay enabled for streaming tab");
-    assert.equal(input.placeholder, "Agent working... type to queue");
+    assert.equal(input.placeholder, "Agent working... Esc to stop");
   });
 
   it("turn sidebar reflects the active tab's turns", () => {

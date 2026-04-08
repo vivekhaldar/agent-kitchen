@@ -27,6 +27,7 @@
   var $chatMessages = document.getElementById("chat-messages");
   var $chatInput = document.getElementById("chat-input");
   var $chatSend = document.getElementById("chat-send");
+  var $chatStop = document.getElementById("chat-stop");
   var $chatClose = document.getElementById("chat-close");
   var $chatCost = document.getElementById("chat-cost");
   var $imagePreview = document.getElementById("chat-image-preview");
@@ -753,16 +754,37 @@
     sendToAgent(tab, next);
   }
 
+  function cancelAgent() {
+    if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
+    var tab = chatTabs[activeChatTabId];
+    if (!tab.streaming) return;
+    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
+      tab.ws.send(JSON.stringify({ type: "cancel" }));
+    }
+    tab.messageQueue = [];
+    tab.streaming = false;
+    appendSystemMessage(tab, "Cancelled by user");
+    finalizeAssistantMessage(tab);
+    updateInputState();
+  }
+
   function updateInputState() {
     var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
     var streaming = tab && tab.streaming;
     var queued = tab && tab.messageQueue && tab.messageQueue.length > 0;
     $chatInput.disabled = false;
-    $chatSend.disabled = false;
+    // Show stop button during streaming, send button otherwise
+    if (streaming) {
+      $chatSend.classList.add("hidden");
+      $chatStop.classList.remove("hidden");
+    } else {
+      $chatSend.classList.remove("hidden");
+      $chatStop.classList.add("hidden");
+    }
     if (streaming && queued) {
       $chatInput.placeholder = queued + " queued...";
     } else if (streaming) {
-      $chatInput.placeholder = "Agent working... type to queue";
+      $chatInput.placeholder = "Agent working... Esc to stop";
     } else if (tab && tab.terminated) {
       $chatInput.placeholder = "Send a message to resume session...";
     } else {
@@ -776,13 +798,21 @@
     this.style.height = Math.min(this.scrollHeight, 150) + "px";
   });
 
-  // Enter to send, Shift+Enter for newline
+  // Enter to send, Shift+Enter for newline, Esc to stop
   $chatInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendUserMessage();
+    } else if (e.key === "Escape") {
+      var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
+      if (tab && tab.streaming) {
+        e.preventDefault();
+        cancelAgent();
+      }
     }
   });
+
+  $chatStop.addEventListener("click", cancelAgent);
 
   $chatSend.addEventListener("click", sendUserMessage);
 

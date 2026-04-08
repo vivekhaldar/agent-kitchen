@@ -1716,6 +1716,24 @@ body.terminal-open .content {
 .chat-send-btn:hover { opacity: 0.8; }
 .chat-send-btn:disabled { opacity: 0.3; cursor: default; }
 
+.chat-stop-btn {
+  width: 36px;
+  height: 36px;
+  background: #e53e3e;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 150ms ease;
+}
+.chat-stop-btn:hover { background: #c53030; }
+.chat-stop-btn.hidden { display: none; }
+
 body.chat-open .content {
   padding-bottom: calc(50vh + 24px);
 }
