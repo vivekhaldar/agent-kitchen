@@ -415,6 +415,11 @@ def create_app(
         _dashboard_data = data
         return JSONResponse(content=_serialize_dashboard(data))
 
+    @app.get("/api/agents")
+    async def get_agents():
+        """Return the list of available agent types."""
+        return JSONResponse(content={"agents": list(AGENT_COMMANDS.keys())})
+
     @app.get("/api/launch")
     async def launch(
         source: str = Query(...),

@@ -106,6 +106,7 @@
   function closeChatTab(tabId) {
     var tab = chatTabs[tabId];
     if (!tab) return;
+    var closedSessionId = tab.sessionId;
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
       tab.ws.close();
     }
@@ -113,6 +114,9 @@
       tab.container.parentNode.removeChild(tab.container);
     }
     delete chatTabs[tabId];
+    if (closedSessionId) {
+      emitSessionEvent("agent-session-closed", { sessionId: closedSessionId });
+    }
 
     var remaining = Object.keys(chatTabs);
     if (remaining.length > 0) {
@@ -225,6 +229,12 @@
         if (!msg.historyLoaded && tabData.sessionSummary) {
           appendInfoBanner(tabData, "Previous messages not available. " + tabData.sessionSummary);
         }
+        emitSessionEvent("agent-session-started", {
+          sessionId: msg.sessionId,
+          agent: tabData.agent,
+          cwd: tabData.cwd,
+          title: tabData.title,
+        });
         break;
 
       case "update":
@@ -237,6 +247,10 @@
         tabData.streaming = false;
         flushMessageQueue(tabData);
         updateInputState();
+        emitSessionEvent("agent-session-updated", {
+          sessionId: tabData.sessionId,
+          streaming: tabData.streaming,
+        });
         break;
 
       case "error":
@@ -745,6 +759,10 @@
       tab.ws.send(JSON.stringify(msg));
       tab.streaming = true;
       updateInputState();
+      emitSessionEvent("agent-session-updated", {
+        sessionId: tab.sessionId,
+        streaming: true,
+      });
     }
   }
 
@@ -925,7 +943,40 @@
 
   // --- Public API (called from app.js) ---
 
+  // --- Custom Events for dashboard integration ---
+
+  function emitSessionEvent(eventName, detail) {
+    window.dispatchEvent(new CustomEvent(eventName, { detail: detail }));
+  }
+
   window.AgentChat = {
+    // Returns set of sessionIds that have open chat tabs
+    getActiveSessionIds: function () {
+      var ids = new Set();
+      Object.keys(chatTabs).forEach(function (tabId) {
+        var tab = chatTabs[tabId];
+        if (tab.sessionId) ids.add(tab.sessionId);
+      });
+      return ids;
+    },
+
+    // Returns info about active tabs keyed by sessionId
+    getActiveSessions: function () {
+      var sessions = {};
+      Object.keys(chatTabs).forEach(function (tabId) {
+        var tab = chatTabs[tabId];
+        if (tab.sessionId) {
+          sessions[tab.sessionId] = {
+            streaming: tab.streaming,
+            agent: tab.agent,
+            cwd: tab.cwd,
+            title: tab.title,
+          };
+        }
+      });
+      return sessions;
+    },
+
     openChat: function (session) {
       // Check for existing tab with same session
       var ids = Object.keys(chatTabs);
@@ -940,8 +991,8 @@
       createChatTab(title, agent, session.cwd, session.id, session.summary);
     },
 
-    openNewChat: function (cwd) {
-      var agent = localStorage.getItem("ak-default-agent") || "claude";
+    openNewChat: function (cwd, agent) {
+      agent = agent || localStorage.getItem("ak-default-agent") || "claude";
       var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
       createChatTab("New: " + displayName, agent, cwd, null, null);
     },
