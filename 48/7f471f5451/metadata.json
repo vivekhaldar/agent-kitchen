@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "487f471f5451",
+  "strategy": "manual-commit",
+  "branch": "feature/rich-chat-view",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "IMPROVEMENT_REPORT.md",
+    "docs/rich-chat-view-design.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/48/7f471f5451/0/metadata.json",
+      "transcript": "/48/7f471f5451/0/full.jsonl",
+      "content_hash": "/48/7f471f5451/0/content_hash.txt",
+      "prompt": "/48/7f471f5451/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 63177,
+    "cache_read_tokens": 680239,
+    "output_tokens": 9630,
+    "api_call_count": 13
+  }
+}
