@@ -1,0 +1,17 @@
+commit and push this branch
+
+---
+
+what was the parent branch of this branch? merge into that, then switch to that parent branch
+
+---
+
+now on to docs. we've done a lot of new work in this branch. does that require updates to docs or READMEs? update them all
+
+---
+
+commit and push
+
+---
+
+how do you pick between light/dark mode? can you add a keyboard shortcut to toggle it?
