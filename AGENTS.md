@@ -47,14 +47,21 @@ JSONL files (~/.claude, ~/.codex)
 - **cache.py** — Disk cache at `~/.cache/agent-kitchen/summaries.json`. Invalidation by file mtime (not TTL). Atomic writes via temp file + rename. Merges on-disk state before writing to handle concurrent access.
 - **git_status.py** — Subprocess calls to git for branch, dirty, unpushed, untracked. Repo root lookups are cached; status is always live.
 - **grouping.py** — Pure function: partitions sessions into `RepoGroup` (with git status) and `NonRepoGroup` (by cwd), sorted by most recent activity.
-- **server.py** — FastAPI app. Orchestrates the pipeline via `_scan_and_group()` (fast, no LLM) and `run_scan_pipeline()` (full). Dashboard state (`_dashboard_data`) is swapped atomically, never mutated. Includes WebSocket PTY for browser-based terminal.
+- **server.py** — FastAPI app. Orchestrates the pipeline via `_scan_and_group()` (fast, no LLM) and `run_scan_pipeline()` (full). Dashboard state (`_dashboard_data`) is swapped atomically, never mutated. Includes WebSocket endpoints for both PTY terminal and ACP chat sessions.
+- **acp_bridge.py** — Spawns coding agents via the Agent Client Protocol (ACP). Manages agent subprocess lifecycle and relays streaming updates (text, tool calls, status) to a callback.
 - **config.py** — Constants with env var overrides. `setup_auth()` checks `ANTHROPIC_API_KEY`, then `CLAUDE_CODE_OAUTH_TOKEN`, then `pass` password manager.
 - **indexer.py** — Standalone pre-indexer for batch LLM summarization with progress logging.
 - **cli.py** — Subcommands: `web` (dashboard) and `index` (pre-summarize).
 
 ### Frontend (src/agent_kitchen/static/)
 
-Vanilla HTML/JS/CSS, no build step. `app.js` fetches `/api/sessions`, renders repo groups with collapsible headers, supports fuzzy search (`/` key), time range slider, and browser terminal via xterm.js WebSocket.
+Vanilla HTML/JS/CSS, no build step.
+
+- **app.js** — Dashboard client. Fetches `/api/sessions`, renders repo groups as elevated cards with collapsible headers, status pills, metadata with dot separators, fuzzy search (`/` key), time segment filter, and keyboard navigation (`j`/`k`/`Enter`).
+- **chat.js** — Rich chat panel. Opens ACP agent conversations via WebSocket, renders markdown with syntax highlighting (marked + highlight.js), collapsible tool call cards with status-colored borders, turn-by-turn sidebar navigation (Ctrl+↑/↓), image paste support, token usage display, and session lifecycle management (death detection, restart).
+- **style.css** — Monochrome theme with orange accent. Card-based layout, rounded status pills, command-palette search overlay with backdrop blur, polished dark mode. Sticky header with favicon.
+- **index.html** — Shell with panels for dashboard, terminal (xterm.js), and chat.
+- **favicon.svg** — Layered flame icon.
 
 ## Key Design Decisions
 
@@ -70,10 +77,14 @@ Vanilla HTML/JS/CSS, no build step. `app.js` fetches `/api/sessions`, renders re
 - Codex sessions get a free summary from `session_index.jsonl` (thread_name), so many skip LLM calls entirely.
 - The `--summarize` flag on `agent-kitchen web` is **off by default** — without it, only cached/fallback summaries are shown.
 - Terminal launch is macOS-only (AppleScript for Terminal.app, `open -na` for Ghostty).
+- ACP stdio buffer is set to 10MB to handle large agent responses; the server truncates tool call content before relaying over WebSocket to keep payloads manageable.
+- The `CLAUDECODE` env var must be unset before spawning ACP agent subprocesses to avoid nested-session errors when running inside Claude Code.
 
 ## Testing Conventions
 
 - Test fixtures are real JSONL files in `tests/fixtures/`.
 - LLM calls are mocked — no real API calls in tests.
 - Async tests use `@pytest.mark.asyncio`.
+- Frontend JS tests use Node's built-in test runner with jsdom (`node --test tests/test_chat.mjs`).
+- Pre-commit hooks run ruff check, ruff format, pytest, and JS tests — all must pass.
 - All source files start with `# ABOUTME:` comments (two lines describing the file's purpose).

@@ -29,12 +29,16 @@ Agent Kitchen fixes this by scanning your local session data, grouping everythin
 ## Features
 
 - **Unified view** — Claude Code and Codex CLI sessions in one place, grouped by repo
+- **Rich chat view** — click any session to see a rendered conversation with markdown, code highlighting, and collapsible tool calls
+- **Live agent interaction** — send messages to agents directly from the browser via the Agent Client Protocol (ACP)
 - **LLM summaries** — one-line descriptions and status classification (done / in progress / waiting)
 - **Live git status** — current branch, dirty files, unpushed commits per repo
 - **Repo timelines** — see how work evolved across sessions over days
-- **One-click resume** — click any session to resume it in a terminal
-- **Browser terminal** — resume sessions in-browser via xterm.js
-- **Fuzzy search** — press `/` to filter across all sessions
+- **Browser terminal** — resume sessions in-browser via xterm.js (fallback mode)
+- **Fuzzy search** — press `/` to filter across all sessions with command-palette overlay
+- **Keyboard navigation** — `j`/`k` to move between groups, `Enter` to expand, `?` for shortcuts
+- **Image support** — paste images into chat with preview strip
+- **Session lifecycle** — automatic death detection, termination UI, and restart capability
 - **Fast startup** — cached summaries load instantly, LLM upgrades happen in the background
 - **No build step** — vanilla HTML/JS/CSS, zero npm dependencies
 
@@ -106,6 +110,8 @@ Without credentials, the dashboard still works — you just get fallback summari
 
 ## How It Works
 
+**Dashboard pipeline** — scanning and grouping sessions:
+
 ```
 JSONL session files (~/.claude, ~/.codex)
   → Scanner (parse sessions, filter noise)
@@ -116,6 +122,14 @@ JSONL session files (~/.claude, ~/.codex)
   → FastAPI server (JSON API + static frontend)
 ```
 
+**Chat view** — interacting with agents:
+
+```
+Browser (chat.js) ↔ WebSocket ↔ FastAPI ↔ ACP agent subprocess
+```
+
+When you click a session, the chat panel opens a rich conversation view. Sending a message spawns an agent subprocess using the [Agent Client Protocol](docs/rich-chat-view-design.md), which streams responses back over WebSocket as structured messages (text, tool calls, status updates).
+
 Only interactive sessions are shown. Programmatic SDK sessions (≤1 user turn) and subagent child sessions are filtered out. See [docs/session-formats.md](docs/session-formats.md) for details.
 
 ## Development
@@ -125,7 +139,8 @@ git clone https://github.com/haldar/agent-kitchen.git
 cd agent-kitchen
 uv pip install -e ".[dev]"
 
-uv run pytest                    # Run tests
+uv run pytest                    # Python tests
+node --test tests/test_chat.mjs  # Frontend JS tests
 uvx ruff check --fix .           # Lint
 uvx ruff format .                # Format
 ```
