@@ -3,7 +3,7 @@
   "checkpoint_id": "ff3f88f0c063",
   "strategy": "manual-commit",
   "branch": "feature/chat-windows",
-  "checkpoints_count": 3,
+  "checkpoints_count": 7,
   "files_touched": [
     "src/agent_kitchen/acp_bridge.py",
     "tests/test_acp_lifecycle.py"
@@ -20,13 +20,19 @@
       "transcript": "/ff/3f88f0c063/1/full.jsonl",
       "content_hash": "/ff/3f88f0c063/1/content_hash.txt",
       "prompt": "/ff/3f88f0c063/1/prompt.txt"
+    },
+    {
+      "metadata": "/ff/3f88f0c063/2/metadata.json",
+      "transcript": "/ff/3f88f0c063/2/full.jsonl",
+      "content_hash": "/ff/3f88f0c063/2/content_hash.txt",
+      "prompt": "/ff/3f88f0c063/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 369,
-    "cache_creation_tokens": 1812122,
-    "cache_read_tokens": 32504458,
-    "output_tokens": 84132,
-    "api_call_count": 318
+    "input_tokens": 429,
+    "cache_creation_tokens": 2059989,
+    "cache_read_tokens": 36501859,
+    "output_tokens": 116400,
+    "api_call_count": 366
   }
 }
