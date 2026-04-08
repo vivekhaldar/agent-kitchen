@@ -45,6 +45,7 @@
   let lastScannedTime = null;
   let expandedRepos = new Set(); // repo_root values that are expanded
   var timeFilterDays = Infinity; // max days back to show (Infinity = all)
+  var availableAgents = ["claude"]; // fetched from /api/agents on load
 
   // --- DOM refs ---
   const $loading = document.getElementById("loading");
@@ -199,6 +200,7 @@
     const cssCls = statusCssClass(session.status);
     const row = document.createElement("div");
     row.className = "session-row" + (isSessionFresh(session) ? " session-fresh" : "");
+    row.setAttribute("data-session-id", session.id);
     row.innerHTML =
       '<div class="status-dot ' + cssCls + '"></div>' +
       '<div class="session-summary">' + escapeHtml(sessionLabel(session)) + "</div>" +
@@ -227,7 +229,7 @@
     var icon = opts.icon || "";
     var name = '<span class="repo-name-display">' + escapeHtml(opts.displayName) + "</span>";
     var meta = '<span class="repo-meta-line">' + opts.metaText + "</span>";
-    var btn = '<button class="btn-new-session" title="New Claude session in ' + escapeHtml(opts.cwd) + '" aria-label="New session in ' + escapeHtml(opts.displayName) + '">+</button>';
+    var btn = '<button class="btn-new-session" title="New agent session in ' + escapeHtml(opts.cwd) + '" data-cwd="' + escapeHtml(opts.cwd) + '" aria-label="New session in ' + escapeHtml(opts.displayName) + '">+</button>';
 
     return (
       '<div class="repo-header-left">' + chevron + icon +
@@ -255,24 +257,68 @@
     var sessionList = document.createElement("div");
     sessionList.className = "session-list" + (isExpanded ? "" : " collapsed");
 
-    // Render timeline if present, filtered by time slider
+    // Render timeline as prose paragraph with session links
     if (opts.timeline && opts.timeline.length > 0) {
       var timelineEl = document.createElement("div");
       timelineEl.className = "repo-timeline";
       var cutoff = timeFilterDays === Infinity ? 0 : Date.now() - timeFilterDays * 24 * 60 * 60 * 1000;
-      opts.timeline.forEach(function (phase) {
-        if (cutoff > 0) {
-          var phaseTime = parsePhaseDate(phase);
-          if (phaseTime > 0 && phaseTime < cutoff) return;
-        }
-        var phaseEl = document.createElement("div");
-        phaseEl.className = "timeline-phase";
-        phaseEl.innerHTML =
-          '<span class="timeline-period">' + escapeHtml(phase.period) + '</span>' +
-          '<span class="timeline-desc">' + escapeHtml(phase.description) + '</span>';
-        timelineEl.appendChild(phaseEl);
+
+      // Build a session lookup from filtered sessions
+      var sessionById = {};
+      filteredSessions.forEach(function (s) { sessionById[s.id] = s; });
+
+      // Filter phases by time window
+      var visiblePhases = opts.timeline.filter(function (phase) {
+        if (cutoff <= 0) return true;
+        var phaseTime = parsePhaseDate(phase);
+        return phaseTime <= 0 || phaseTime >= cutoff;
       });
-      if (timelineEl.children.length > 0) {
+
+      if (visiblePhases.length > 0) {
+        var timeLabel = timeFilterDays === 1 ? "Today" :
+          timeFilterDays === 7 ? "This week" :
+          timeFilterDays === 30 ? "This month" : "Overall";
+        var prose = document.createElement("p");
+        prose.className = "timeline-prose";
+
+        var sentences = [];
+        visiblePhases.forEach(function (phase) {
+          var desc = phase.description;
+          // Find a matching session to link to
+          var linkedSessionId = null;
+          if (phase.session_ids && phase.session_ids.length > 0) {
+            // Use the first session ID that exists in filtered sessions
+            for (var i = 0; i < phase.session_ids.length; i++) {
+              if (sessionById[phase.session_ids[i]]) {
+                linkedSessionId = phase.session_ids[i];
+                break;
+              }
+            }
+          }
+          if (linkedSessionId) {
+            sentences.push('<a class="timeline-link" data-session-id="' +
+              escapeHtml(linkedSessionId) + '" href="#">' + escapeHtml(desc) + '</a>');
+          } else {
+            sentences.push(escapeHtml(desc));
+          }
+        });
+
+        prose.innerHTML = timeLabel + ": " + sentences.join(". ") + ".";
+
+        // Attach click handlers for session links
+        prose.querySelectorAll(".timeline-link").forEach(function (link) {
+          link.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var sid = link.getAttribute("data-session-id");
+            var session = sessionById[sid];
+            if (session) {
+              launchSession(session, link);
+            }
+          });
+        });
+
+        timelineEl.appendChild(prose);
         sessionList.appendChild(timelineEl);
       }
     }
@@ -305,7 +351,7 @@
 
     header.querySelector(".btn-new-session").addEventListener("click", function (e) {
       e.stopPropagation();
-      openNewSession(opts.cwd);
+      showAgentPicker(opts.cwd, e.currentTarget);
     });
 
     header.addEventListener("click", function () {
@@ -415,6 +461,9 @@
         : renderNonRepoGroup(entry.group, filtered);
       if (el) $repoGroups.appendChild(el);
     });
+
+    // Mark any sessions that have active chat tabs
+    updateActiveIndicators();
   }
 
   // --- API ---
@@ -667,14 +716,70 @@
     }, session.id);
   }
 
-  function openNewSession(cwd) {
+  function openNewSession(cwd, agent) {
     var mode = localStorage.getItem("ak-view-mode") || "chat";
     if (mode === "chat" && window.AgentChat) {
-      window.AgentChat.openNewChat(cwd);
+      window.AgentChat.openNewChat(cwd, agent);
     } else {
       var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
       createTerminalTab("New: " + displayName, { mode: "new", cwd: cwd }, null);
     }
+  }
+
+  // --- Agent Picker ---
+
+  var activeAgentPicker = null;
+
+  function closeAgentPicker() {
+    if (activeAgentPicker) {
+      activeAgentPicker.remove();
+      activeAgentPicker = null;
+    }
+    document.removeEventListener("click", onAgentPickerOutsideClick, true);
+  }
+
+  function onAgentPickerOutsideClick(e) {
+    if (activeAgentPicker && !activeAgentPicker.contains(e.target)) {
+      closeAgentPicker();
+    }
+  }
+
+  function showAgentPicker(cwd, anchorEl) {
+    closeAgentPicker();
+
+    // If only one agent, skip the picker
+    if (availableAgents.length <= 1) {
+      openNewSession(cwd, availableAgents[0] || "claude");
+      return;
+    }
+
+    var picker = document.createElement("div");
+    picker.className = "agent-picker";
+
+    // Position below the anchor button
+    var rect = anchorEl.getBoundingClientRect();
+    picker.style.top = (rect.bottom + 4) + "px";
+    picker.style.right = (window.innerWidth - rect.right) + "px";
+
+    availableAgents.forEach(function (agent) {
+      var item = document.createElement("div");
+      item.className = "agent-picker-item";
+      item.textContent = agent;
+      item.addEventListener("click", function (e) {
+        e.stopPropagation();
+        closeAgentPicker();
+        openNewSession(cwd, agent);
+      });
+      picker.appendChild(item);
+    });
+
+    document.body.appendChild(picker);
+    activeAgentPicker = picker;
+
+    // Close on outside click (delayed to avoid immediate close)
+    requestAnimationFrame(function () {
+      document.addEventListener("click", onAgentPickerOutsideClick, true);
+    });
   }
 
   function handleTerminalResize() {
@@ -951,7 +1056,104 @@
     $searchHintBar.addEventListener("click", openSearch);
   }
 
+  // --- Live Session Tracking ---
+  // Tracks sessions started from the "+" button before the next bulk refresh.
+  // Maps sessionId → { agent, cwd, title }
+  var liveSessionMap = {};
+
+  function injectPlaceholderRow(detail) {
+    var cwd = detail.cwd;
+    var sessionId = detail.sessionId;
+    if (!sessionId || !cwd) return;
+
+    // Skip if this session already has a row in the dashboard (resuming existing session)
+    if ($repoGroups.querySelector('.session-row[data-session-id="' + sessionId + '"]')) {
+      return;
+    }
+
+    liveSessionMap[sessionId] = detail;
+
+    // Build a synthetic session object for rendering
+    var placeholderSession = {
+      id: sessionId,
+      source: detail.agent || "claude",
+      cwd: cwd,
+      summary: detail.title || "Starting...",
+      status: "in progress",
+      last_active: new Date().toISOString(),
+      turn_count: 0,
+    };
+
+    // Find the matching group container in the DOM
+    var groupEls = $repoGroups.querySelectorAll(".repo-group");
+    for (var i = 0; i < groupEls.length; i++) {
+      var header = groupEls[i].querySelector(".repo-header");
+      if (!header) continue;
+      var btn = header.querySelector(".btn-new-session");
+      if (btn && btn.getAttribute("data-cwd") === cwd) {
+        var sessionList = groupEls[i].querySelector(".session-list");
+        if (sessionList) {
+          // Ensure the group is expanded
+          if (sessionList.classList.contains("collapsed")) {
+            header.click();
+          }
+          // Insert at the top (after timeline if present)
+          var timeline = sessionList.querySelector(".repo-timeline");
+          var insertBefore = timeline ? timeline.nextSibling : sessionList.firstChild;
+          var row = renderSessionRow(placeholderSession);
+          sessionList.insertBefore(row, insertBefore);
+          sessionList.style.maxHeight = sessionList.scrollHeight + "px";
+          // Scroll to make the new row visible
+          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        return;
+      }
+    }
+  }
+
+  function updateActiveIndicators() {
+    var rows = $repoGroups.querySelectorAll(".session-row[data-session-id]");
+    if (!window.AgentChat) return;
+    var activeIds = window.AgentChat.getActiveSessionIds();
+    var activeSessions = window.AgentChat.getActiveSessions();
+
+    rows.forEach(function (row) {
+      var sid = row.getAttribute("data-session-id");
+      row.classList.toggle("session-active", activeIds.has(sid));
+      row.classList.toggle("session-streaming",
+        !!(activeSessions[sid] && activeSessions[sid].streaming));
+    });
+  }
+
+  // Listen for chat session lifecycle events
+  window.addEventListener("agent-session-started", function (e) {
+    injectPlaceholderRow(e.detail);
+    updateActiveIndicators();
+  });
+
+  window.addEventListener("agent-session-updated", function (e) {
+    updateActiveIndicators();
+  });
+
+  window.addEventListener("agent-session-closed", function (e) {
+    updateActiveIndicators();
+    // Clean up from live map
+    if (e.detail.sessionId) {
+      delete liveSessionMap[e.detail.sessionId];
+    }
+  });
+
   // --- Init ---
+
+  // Fetch available agents for the picker
+  fetch("/api/agents")
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.agents && data.agents.length > 0) {
+        availableAgents = data.agents;
+      }
+    })
+    .catch(function () { /* keep default */ });
 
   fetchSessions();
 })();

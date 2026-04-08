@@ -715,27 +715,21 @@ body {
   border-bottom: 1px solid var(--border-light);
 }
 
-.timeline-phase {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 3px 0;
+.timeline-prose {
+  margin: 0;
   font-size: 13px;
-}
-
-.timeline-period {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-muted);
-  min-width: 80px;
-  text-align: right;
-  flex-shrink: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.timeline-desc {
+  line-height: 1.5;
   color: var(--text-secondary);
+}
+
+.timeline-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.timeline-link:hover {
+  text-decoration: underline;
 }
 
 /* ===== Session List ===== */
@@ -909,6 +903,46 @@ body {
 
 .source-badge.codex {
   color: var(--badge-codex);
+}
+
+/* ===== Active Session Indicators ===== */
+
+.session-row.session-active {
+  border-left-color: var(--accent);
+}
+
+.session-row.session-streaming {
+  background: var(--accent-dim);
+}
+
+/* ===== Agent Picker ===== */
+
+.agent-picker {
+  position: fixed;
+  z-index: 100;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  padding: 4px 0;
+}
+
+.agent-picker-item {
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background var(--transition);
+}
+
+.agent-picker-item:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
 }
 
 /* ===== Show More Button ===== */
@@ -1820,6 +1854,8 @@ html.dark .chat-bubble.assistant { border-color: var(--border); }
 html.dark .meta-sep { color: #444; }
 html.dark .repo-meta-line .dirty { color: #fc8181; }
 html.dark .repo-meta-line .clean { color: #68d391; }
+html.dark .agent-picker { background: var(--bg-secondary); border-color: var(--border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
+html.dark .agent-picker-item:hover { background: var(--bg-hover); }
 
 /* Theme indicator in header */
 .theme-toggle {

@@ -34,6 +34,7 @@ class TimelinePhase:
     session_count: int
     status: str  # "done", "in progress", "mixed"
     start_date: str | None = None  # ISO date (YYYY-MM-DD) for client-side filtering
+    session_ids: list[str] = field(default_factory=list)  # IDs of sessions in this phase
 
 
 @dataclass

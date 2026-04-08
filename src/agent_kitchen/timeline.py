@@ -84,6 +84,7 @@ def fallback_timeline(sessions: list[Session]) -> list[TimelinePhase]:
                 session_count=len(day_sessions),
                 status=_aggregate_status(day_sessions),
                 start_date=day.isoformat(),
+                session_ids=[s.id for s in day_sessions],
             )
         )
     return phases
@@ -209,9 +210,10 @@ async def generate_group_timeline(group: TimelineGroup) -> list[TimelinePhase]:
             )
         )
 
-    # Distribute session counts and assign start_dates from actual session days
+    # Distribute session counts, IDs, and start_dates from actual session days
     days = _sessions_by_day(sessions)
     sorted_days = [day for day, _ in days]  # already newest-first
+    day_sessions_map = dict(days)
     total = len(sessions)
     if phases:
         per_phase = total // len(phases)
@@ -229,6 +231,9 @@ async def generate_group_timeline(group: TimelineGroup) -> list[TimelinePhase]:
             if phase_days:
                 # start_date is the oldest day in this phase's bucket
                 phase.start_date = min(phase_days).isoformat()
+                # Collect session IDs from all days in this phase
+                for d in phase_days:
+                    phase.session_ids.extend(s.id for s in day_sessions_map.get(d, []))
 
     return phases
 
@@ -274,6 +279,7 @@ async def batch_generate_timelines(
                 "session_count": p.session_count,
                 "status": p.status,
                 "start_date": p.start_date,
+                "session_ids": p.session_ids,
             }
             for p in group.timeline
         ]
