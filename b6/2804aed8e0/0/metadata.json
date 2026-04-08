@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "b62804aed8e0",
+  "session_id": "3c7fc27d-53fe-48b1-acf2-36e2b38454d6",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-08T05:24:41.442551Z",
+  "branch": "feature/rich-chat-view",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".gitignore",
+    "IMPROVEMENT_REPORT.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "196128172a3d",
+  "checkpoint_transcript_start": 157,
+  "transcript_lines_at_start": 157,
+  "token_usage": {
+    "input_tokens": 1,
+    "cache_creation_tokens": 443,
+    "cache_read_tokens": 60210,
+    "output_tokens": 121,
+    "api_call_count": 1
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-08T05:24:41.347624Z",
+    "agent_lines": 232,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 232,
+    "agent_percentage": 100
+  }
+}
