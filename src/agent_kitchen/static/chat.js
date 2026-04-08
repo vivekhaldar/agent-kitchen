@@ -142,6 +142,7 @@
       container: container,
       title: title,
       streaming: false,
+      messageQueue: [],
       currentTextAccum: "",
       currentTextEl: null,
       thinkingAccum: "",
@@ -233,6 +234,7 @@
         finalizeAssistantMessage(tabData);
         collapseCompletedTools(tabData);
         tabData.streaming = false;
+        flushMessageQueue(tabData);
         updateInputState();
         break;
 
@@ -708,7 +710,6 @@
   function sendUserMessage() {
     if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
     var tab = chatTabs[activeChatTabId];
-    if (tab.streaming) return;
 
     var text = $chatInput.value.trim();
     var images = tab.pendingImages.slice();
@@ -721,26 +722,47 @@
     renderImagePreview();
     updateInputPlaceholder();
 
+    var queuedMsg = { type: "user_message", text: text };
+    if (images.length) {
+      queuedMsg.images = images.map(function (img) {
+        return { data: img.data, mimeType: img.mimeType };
+      });
+    }
+
+    if (tab.streaming) {
+      if (!tab.messageQueue) tab.messageQueue = [];
+      tab.messageQueue.push(queuedMsg);
+      updateInputState();
+      return;
+    }
+
+    sendToAgent(tab, queuedMsg);
+  }
+
+  function sendToAgent(tab, msg) {
     if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
-      var msg = { type: "user_message", text: text };
-      if (images.length) {
-        msg.images = images.map(function (img) {
-          return { data: img.data, mimeType: img.mimeType };
-        });
-      }
       tab.ws.send(JSON.stringify(msg));
       tab.streaming = true;
       updateInputState();
     }
   }
 
+  function flushMessageQueue(tab) {
+    if (!tab.messageQueue || tab.messageQueue.length === 0) return;
+    var next = tab.messageQueue.shift();
+    sendToAgent(tab, next);
+  }
+
   function updateInputState() {
     var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
     var streaming = tab && tab.streaming;
-    $chatInput.disabled = streaming;
-    $chatSend.disabled = streaming;
-    if (streaming) {
-      $chatInput.placeholder = "Waiting for response...";
+    var queued = tab && tab.messageQueue && tab.messageQueue.length > 0;
+    $chatInput.disabled = false;
+    $chatSend.disabled = false;
+    if (streaming && queued) {
+      $chatInput.placeholder = queued + " queued...";
+    } else if (streaming) {
+      $chatInput.placeholder = "Agent working... type to queue";
     } else if (tab && tab.terminated) {
       $chatInput.placeholder = "Send a message to resume session...";
     } else {
@@ -929,6 +951,7 @@
         container: container,
         title: "Test",
         streaming: false,
+        messageQueue: [],
         currentTextAccum: "",
         currentTextEl: null,
         thinkingAccum: "",

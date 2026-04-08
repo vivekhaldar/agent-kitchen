@@ -387,7 +387,7 @@ describe("tab switching isolates state", () => {
     assert.equal(input.disabled, false, "Input should be enabled for non-streaming tab");
   });
 
-  it("switching to streaming tab disables input", () => {
+  it("switching to streaming tab keeps input enabled with queue hint", () => {
     const tab1 = makeTab(win);
     tab1.id = "tab-1";
     tab1.streaming = false;
@@ -396,14 +396,15 @@ describe("tab switching isolates state", () => {
     const tab2 = makeTab(win);
     tab2.id = "tab-2";
     tab2.streaming = true;
+    tab2.messageQueue = [];
     const state = api.getState();
     state.chatTabs[tab2.id] = tab2;
 
     api.switchChatTab("tab-2");
 
     const input = win.document.getElementById("chat-input");
-    assert.equal(input.disabled, true, "Input should be disabled for streaming tab");
-    assert.equal(input.placeholder, "Waiting for response...");
+    assert.equal(input.disabled, false, "Input should stay enabled for streaming tab");
+    assert.equal(input.placeholder, "Agent working... type to queue");
   });
 
   it("turn sidebar reflects the active tab's turns", () => {
