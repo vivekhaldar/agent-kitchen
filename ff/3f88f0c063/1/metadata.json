@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "ff3f88f0c063",
+  "session_id": "3d2cc6e5-9b99-4bff-b602-44bf9ad5dd1c",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-08T21:02:33.106387Z",
+  "branch": "feature/chat-windows",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/agent_kitchen/acp_bridge.py",
+    "tests/test_acp_lifecycle.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "f2220da5ecd0",
+  "token_usage": {
+    "input_tokens": 330,
+    "cache_creation_tokens": 1702321,
+    "cache_read_tokens": 30606595,
+    "output_tokens": 76370,
+    "api_call_count": 285
+  },
+  "session_metrics": {
+    "turn_count": 22
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-08T21:02:32.476409Z",
+    "agent_lines": 0,
+    "human_added": 1252,
+    "human_modified": 10,
+    "human_removed": 0,
+    "total_committed": 1252,
+    "agent_percentage": 0
+  }
+}
