@@ -1,5 +1,5 @@
-// ABOUTME: Chat panel UI module — rich markdown rendering of ACP agent conversations.
-// ABOUTME: Manages chat tabs, WebSocket connections, streaming text, and tool call cards.
+// ABOUTME: Chat window UI module — floating, draggable chat windows for ACP agent conversations.
+// ABOUTME: Each window is independent with its own input, messages, and WebSocket connection.
 
 (function () {
   "use strict";
@@ -17,21 +17,15 @@
   });
 
   // --- State ---
-  var chatTabs = {};
-  var activeChatTabId = null;
-  var chatTabIdCounter = 0;
+  var chatWindows = {};
+  var focusedWindowId = null;
+  var windowIdCounter = 0;
+  var zIndexCounter = 101;
+  var CASCADE_OFFSET = 30;
 
   // --- DOM refs ---
-  var $chatPanel = document.getElementById("chat-panel");
-  var $chatTabs = document.getElementById("chat-tabs");
-  var $chatMessages = document.getElementById("chat-messages");
-  var $chatInput = document.getElementById("chat-input");
-  var $chatSend = document.getElementById("chat-send");
-  var $chatStop = document.getElementById("chat-stop");
-  var $chatClose = document.getElementById("chat-close");
-  var $chatCost = document.getElementById("chat-cost");
-  var $imagePreview = document.getElementById("chat-image-preview");
-
+  var $windowLayer = document.getElementById("chat-window-layer");
+  var $dock = document.getElementById("chat-dock");
 
   // --- Helpers ---
 
@@ -45,13 +39,8 @@
     return DOMPurify.sanitize(marked.parse(text || ""));
   }
 
-  function generateChatTabId() {
-    return "chat-" + (chatTabIdCounter++);
-  }
-
-  function scrollToBottom() {
-    if (!$chatMessages) return;
-    $chatMessages.scrollTop = $chatMessages.scrollHeight;
+  function generateWindowId() {
+    return "cw-" + (windowIdCounter++);
   }
 
   // --- Tool call icons by kind ---
@@ -65,86 +54,323 @@
     fetch: "&#127760;",    // globe
   };
 
-  // --- Tab Management ---
+  // --- Window Placement ---
 
-  function renderChatTabs() {
-    $chatTabs.innerHTML = "";
-    Object.keys(chatTabs).forEach(function (tabId) {
-      var tab = chatTabs[tabId];
-      var el = document.createElement("div");
-      el.className = "chat-tab" + (tabId === activeChatTabId ? " active" : "");
-      el.innerHTML =
-        '<span class="chat-tab-title">' + escapeHtml(tab.title) + "</span>" +
-        '<span class="chat-tab-close">&times;</span>';
+  function getNextWindowPosition() {
+    var count = Object.keys(chatWindows).length;
+    var baseX = 80 + (count * CASCADE_OFFSET) % 300;
+    var baseY = 60 + (count * CASCADE_OFFSET) % 200;
+    return { x: baseX, y: baseY };
+  }
 
-      el.querySelector(".chat-tab-title").addEventListener("click", function () {
-        switchChatTab(tabId);
-      });
-      el.querySelector(".chat-tab-close").addEventListener("click", function (e) {
+  function getDefaultWindowSize() {
+    var w = Math.min(520, window.innerWidth - 40);
+    var h = Math.min(600, window.innerHeight - 80);
+    return { width: w, height: h };
+  }
+
+  // --- Focus Management ---
+
+  function focusWindow(winId) {
+    if (focusedWindowId && chatWindows[focusedWindowId]) {
+      chatWindows[focusedWindowId].el.classList.remove("focused");
+    }
+    focusedWindowId = winId;
+    if (chatWindows[winId]) {
+      var win = chatWindows[winId];
+      win.el.classList.add("focused");
+      win.el.style.zIndex = ++zIndexCounter;
+      win.unreadCount = 0;
+      renderDock();
+    }
+  }
+
+  // --- Dock Bar ---
+
+  function renderDock() {
+    $dock.innerHTML = "";
+    var minimizedIds = Object.keys(chatWindows).filter(function (id) {
+      return chatWindows[id].windowState === "minimized";
+    });
+    if (minimizedIds.length === 0) {
+      $dock.classList.add("hidden");
+      return;
+    }
+    $dock.classList.remove("hidden");
+    minimizedIds.forEach(function (winId) {
+      var win = chatWindows[winId];
+      var pill = document.createElement("div");
+      pill.className = "chat-dock-pill" + (win.streaming ? " streaming" : "");
+
+      var status = document.createElement("span");
+      status.className = "dock-status";
+      pill.appendChild(status);
+
+      var title = document.createElement("span");
+      title.className = "dock-title";
+      title.textContent = win.title;
+      pill.appendChild(title);
+
+      if (win.unreadCount > 0) {
+        var unread = document.createElement("span");
+        unread.className = "dock-unread";
+        unread.textContent = win.unreadCount;
+        pill.appendChild(unread);
+      }
+
+      var close = document.createElement("button");
+      close.className = "dock-close";
+      close.textContent = "\u00d7";
+      close.addEventListener("click", function (e) {
         e.stopPropagation();
-        closeChatTab(tabId);
+        closeWindow(winId);
       });
-      $chatTabs.appendChild(el);
+      pill.appendChild(close);
+
+      pill.addEventListener("click", function () {
+        restoreWindow(winId);
+      });
+
+      $dock.appendChild(pill);
     });
   }
 
-  function switchChatTab(tabId) {
-    if (!chatTabs[tabId]) return;
-    if (activeChatTabId && chatTabs[activeChatTabId]) {
-      chatTabs[activeChatTabId].container.classList.remove("active");
+  // --- Window State Changes ---
+
+  function minimizeWindow(winId) {
+    var win = chatWindows[winId];
+    if (!win) return;
+    win.windowState = "minimized";
+    win.el.classList.add("hidden");
+    if (focusedWindowId === winId) {
+      focusedWindowId = null;
+      // Focus next visible window
+      var visible = Object.keys(chatWindows).filter(function (id) {
+        return chatWindows[id].windowState !== "minimized";
+      });
+      if (visible.length > 0) focusWindow(visible[visible.length - 1]);
     }
-    activeChatTabId = tabId;
-    chatTabs[tabId].container.classList.add("active");
-    renderChatTabs();
-    renderTurnSidebar(chatTabs[tabId]);
-    updateInputState();
-    renderImagePreview();
-    scrollToBottom();
-    $chatInput.focus();
+    renderDock();
+    saveWindowPositions();
   }
 
-  function closeChatTab(tabId) {
-    var tab = chatTabs[tabId];
-    if (!tab) return;
-    var closedSessionId = tab.sessionId;
-    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
-      tab.ws.close();
+  function restoreWindow(winId) {
+    var win = chatWindows[winId];
+    if (!win) return;
+    win.windowState = "floating";
+    win.el.classList.remove("hidden", "maximized");
+    focusWindow(winId);
+    renderDock();
+    saveWindowPositions();
+  }
+
+  function maximizeWindow(winId) {
+    var win = chatWindows[winId];
+    if (!win) return;
+    if (win.windowState === "maximized") {
+      // Restore to floating
+      win.windowState = "floating";
+      win.el.classList.remove("maximized");
+    } else {
+      win.windowState = "maximized";
+      win.el.classList.add("maximized");
+      win.el.classList.remove("hidden");
     }
-    if (tab.container && tab.container.parentNode) {
-      tab.container.parentNode.removeChild(tab.container);
+    focusWindow(winId);
+    renderDock();
+    saveWindowPositions();
+  }
+
+  function closeWindow(winId) {
+    var win = chatWindows[winId];
+    if (!win) return;
+    var closedSessionId = win.sessionId;
+    if (win.ws && win.ws.readyState === WebSocket.OPEN) {
+      win.ws.close();
     }
-    delete chatTabs[tabId];
+    if (win.el && win.el.parentNode) {
+      win.el.parentNode.removeChild(win.el);
+    }
+    delete chatWindows[winId];
     if (closedSessionId) {
       emitSessionEvent("agent-session-closed", { sessionId: closedSessionId });
     }
-
-    var remaining = Object.keys(chatTabs);
-    if (remaining.length > 0) {
-      switchChatTab(remaining[remaining.length - 1]);
-    } else {
-      activeChatTabId = null;
-      $chatPanel.classList.add("hidden");
-      document.body.classList.remove("chat-open");
+    if (focusedWindowId === winId) {
+      focusedWindowId = null;
+      var remaining = Object.keys(chatWindows).filter(function (id) {
+        return chatWindows[id].windowState !== "minimized";
+      });
+      if (remaining.length > 0) focusWindow(remaining[remaining.length - 1]);
     }
-    renderChatTabs();
+    renderDock();
+    saveWindowPositions();
   }
 
-  // --- Chat Tab Creation ---
+  // --- Position Persistence ---
 
-  function createChatTab(title, agent, cwd, existingSessionId, sessionSummary) {
-    var tabId = generateChatTabId();
+  function saveWindowPositions() {
+    var positions = {};
+    Object.keys(chatWindows).forEach(function (id) {
+      var w = chatWindows[id];
+      positions[id] = {
+        x: w.x, y: w.y, width: w.width, height: w.height,
+        windowState: w.windowState,
+      };
+    });
+    try { localStorage.setItem("ak-chat-positions", JSON.stringify(positions)); } catch (e) { /* ignore */ }
+  }
 
-    var container = document.createElement("div");
-    container.className = "chat-tab-container";
-    $chatMessages.appendChild(container);
+  // --- Drag ---
 
-    var tabData = {
-      id: tabId,
+  function initDrag(winId, titlebar) {
+    var startX, startY, origX, origY;
+
+    titlebar.addEventListener("mousedown", function (e) {
+      var win = chatWindows[winId];
+      if (!win || win.windowState === "maximized") return;
+      if (e.target.closest(".chat-window-btn")) return;
+      e.preventDefault();
+      focusWindow(winId);
+      startX = e.clientX;
+      startY = e.clientY;
+      origX = win.x;
+      origY = win.y;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+
+    function onMove(e) {
+      var win = chatWindows[winId];
+      if (!win) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      win.x = Math.max(0, Math.min(window.innerWidth - 100, origX + dx));
+      win.y = Math.max(0, Math.min(window.innerHeight - 40, origY + dy));
+      win.el.style.left = win.x + "px";
+      win.el.style.top = win.y + "px";
+    }
+
+    function onUp() {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      saveWindowPositions();
+    }
+  }
+
+  // --- Resize ---
+
+  function initResize(winId, handle, direction) {
+    var startX, startY, origW, origH, origX, origY;
+
+    handle.addEventListener("mousedown", function (e) {
+      var win = chatWindows[winId];
+      if (!win || win.windowState === "maximized") return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusWindow(winId);
+      startX = e.clientX;
+      startY = e.clientY;
+      origW = win.width;
+      origH = win.height;
+      origX = win.x;
+      origY = win.y;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+
+    function onMove(e) {
+      var win = chatWindows[winId];
+      if (!win) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      if (direction === "right" || direction === "corner") {
+        win.width = Math.max(360, origW + dx);
+      }
+      if (direction === "bottom" || direction === "corner") {
+        win.height = Math.max(280, origH + dy);
+      }
+      win.el.style.width = win.width + "px";
+      win.el.style.height = win.height + "px";
+    }
+
+    function onUp() {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      saveWindowPositions();
+    }
+  }
+
+  // --- Window Creation ---
+
+  function buildWindowDOM(winId, title) {
+    var el = document.createElement("div");
+    el.className = "chat-window";
+    el.setAttribute("data-window-id", winId);
+
+    el.innerHTML =
+      '<div class="chat-window-titlebar">' +
+        '<span class="chat-window-title">' + escapeHtml(title) + '</span>' +
+        '<div class="chat-window-controls">' +
+          '<span class="chat-window-cost hidden"></span>' +
+          '<button class="chat-window-btn win-minimize" title="Minimize">&#8211;</button>' +
+          '<button class="chat-window-btn win-maximize" title="Maximize">&#9744;</button>' +
+          '<button class="chat-window-btn win-close" title="Close">&times;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="chat-window-body">' +
+        '<div class="chat-turn-sidebar hidden">' +
+          '<div class="turn-sidebar-header">' +
+            '<span class="turn-sidebar-title">Turns</span>' +
+            '<span class="turn-counter">-</span>' +
+          '</div>' +
+          '<div class="turn-list"></div>' +
+          '<div class="turn-shortcuts">Ctrl+&uarr;/&darr; navigate</div>' +
+        '</div>' +
+        '<div class="chat-window-messages"></div>' +
+      '</div>' +
+      '<div class="chat-image-preview"></div>' +
+      '<div class="chat-input-bar">' +
+        '<textarea class="chat-input" placeholder="Send a message..." rows="1"></textarea>' +
+        '<button class="chat-send-btn" aria-label="Send">&uarr;</button>' +
+        '<button class="chat-stop-btn hidden" aria-label="Stop" title="Stop (Esc)">&square;</button>' +
+      '</div>' +
+      '<div class="chat-resize-handle right"></div>' +
+      '<div class="chat-resize-handle bottom"></div>' +
+      '<div class="chat-resize-handle corner"></div>';
+
+    return el;
+  }
+
+  function createChatWindow(title, agent, cwd, existingSessionId, sessionSummary) {
+    var winId = generateWindowId();
+    var pos = getNextWindowPosition();
+    var size = getDefaultWindowSize();
+
+    var el = buildWindowDOM(winId, title);
+    el.style.left = pos.x + "px";
+    el.style.top = pos.y + "px";
+    el.style.width = size.width + "px";
+    el.style.height = size.height + "px";
+
+    $windowLayer.appendChild(el);
+
+    // Wire up DOM refs within this window
+    var $titlebar = el.querySelector(".chat-window-titlebar");
+    var $messages = el.querySelector(".chat-window-messages");
+    var $input = el.querySelector(".chat-input");
+    var $send = el.querySelector(".chat-send-btn");
+    var $stop = el.querySelector(".chat-stop-btn");
+    var $cost = el.querySelector(".chat-window-cost");
+    var $imagePreview = el.querySelector(".chat-image-preview");
+    var $turnSidebar = el.querySelector(".chat-turn-sidebar");
+
+    var winData = {
+      id: winId,
+      el: el,
       ws: null,
       sessionId: null,
       agent: agent,
       cwd: cwd,
-      container: container,
       title: title,
       streaming: false,
       messageQueue: [],
@@ -157,43 +383,123 @@
       userTurns: [],
       activeTurnIndex: -1,
       pendingImages: [],
+      windowState: "floating",
+      x: pos.x,
+      y: pos.y,
+      width: size.width,
+      height: size.height,
+      unreadCount: 0,
+      // DOM refs scoped to this window
+      $messages: $messages,
+      $input: $input,
+      $send: $send,
+      $stop: $stop,
+      $cost: $cost,
+      $imagePreview: $imagePreview,
+      $turnSidebar: $turnSidebar,
     };
-    chatTabs[tabId] = tabData;
+    chatWindows[winId] = winData;
 
-    // Show panel
-    $chatPanel.classList.remove("hidden");
-    document.body.classList.add("chat-open");
+    // Title bar buttons
+    el.querySelector(".win-minimize").addEventListener("click", function () {
+      minimizeWindow(winId);
+    });
+    el.querySelector(".win-maximize").addEventListener("click", function () {
+      maximizeWindow(winId);
+    });
+    el.querySelector(".win-close").addEventListener("click", function () {
+      closeWindow(winId);
+    });
+    // Double-click title bar to maximize
+    $titlebar.addEventListener("dblclick", function (e) {
+      if (e.target.closest(".chat-window-btn")) return;
+      maximizeWindow(winId);
+    });
 
-    // Hide previous active tab
-    if (activeChatTabId && chatTabs[activeChatTabId]) {
-      chatTabs[activeChatTabId].container.classList.remove("active");
-    }
-    activeChatTabId = tabId;
-    container.classList.add("active");
+    // Click anywhere in window to focus
+    el.addEventListener("mousedown", function () {
+      focusWindow(winId);
+    });
 
-    renderChatTabs();
-    renderTurnSidebar(tabData);
-    updateInputState();
-    renderImagePreview();
-    connectWebSocket(tabData, existingSessionId);
-    $chatInput.focus();
+    // Drag
+    initDrag(winId, $titlebar);
 
-    return tabId;
+    // Resize handles
+    initResize(winId, el.querySelector(".chat-resize-handle.right"), "right");
+    initResize(winId, el.querySelector(".chat-resize-handle.bottom"), "bottom");
+    initResize(winId, el.querySelector(".chat-resize-handle.corner"), "corner");
+
+    // Input handling (scoped to this window)
+    $input.addEventListener("input", function () {
+      this.style.height = "auto";
+      this.style.height = Math.min(this.scrollHeight, 120) + "px";
+    });
+
+    $input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendWindowMessage(winId);
+      } else if (e.key === "Escape") {
+        if (winData.streaming) {
+          e.preventDefault();
+          cancelWindowAgent(winId);
+        }
+      }
+    });
+
+    // Turn navigation (Ctrl+Up/Down)
+    $input.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        jumpToPreviousTurn(winData);
+      } else if (e.ctrlKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        jumpToNextTurn(winData);
+      } else if (e.ctrlKey && e.key === "t") {
+        e.preventDefault();
+        toggleTurnSidebar(winData);
+      }
+    });
+
+    $send.addEventListener("click", function () { sendWindowMessage(winId); });
+    $stop.addEventListener("click", function () { cancelWindowAgent(winId); });
+
+    // Image paste
+    $input.addEventListener("paste", function (e) {
+      if (winData.streaming) return;
+      var items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image/") === 0) {
+          e.preventDefault();
+          var file = items[i].getAsFile();
+          if (!file) continue;
+          readImageFile(winData, file);
+        }
+      }
+    });
+
+    focusWindow(winId);
+    renderDock();
+    connectWebSocket(winData, existingSessionId);
+    $input.focus();
+
+    return winId;
   }
 
   // --- WebSocket ---
 
-  function connectWebSocket(tabData, sessionId) {
+  function connectWebSocket(winData, sessionId) {
     var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
     var wsUrl = wsProtocol + "//" + location.host + "/ws/chat";
     var ws = new WebSocket(wsUrl);
-    tabData.ws = ws;
+    winData.ws = ws;
 
     ws.onopen = function () {
       ws.send(JSON.stringify({
         type: "start",
-        agent: tabData.agent,
-        cwd: tabData.cwd,
+        agent: winData.agent,
+        cwd: winData.cwd,
         sessionId: sessionId || undefined,
       }));
     };
@@ -201,79 +507,89 @@
     ws.onmessage = function (evt) {
       try {
         var msg = JSON.parse(evt.data);
-        handleServerMessage(tabData, msg);
+        handleServerMessage(winData, msg);
       } catch (e) {
         console.error("Failed to parse chat message:", e);
       }
     };
 
     ws.onclose = function () {
-      tabData.streaming = false;
-      updateInputState();
+      winData.streaming = false;
+      updateWindowInputState(winData);
+      renderDock();
     };
 
     ws.onerror = function () {
-      appendSystemMessage(tabData, "Connection error");
+      appendSystemMessage(winData, "Connection error");
     };
   }
 
   // --- Message Routing ---
 
-  function handleServerMessage(tabData, msg) {
+  function handleServerMessage(winData, msg) {
+    // Track unread for minimized windows
+    if (winData.windowState === "minimized" && msg.type === "update") {
+      winData.unreadCount++;
+      renderDock();
+    }
+
     switch (msg.type) {
       case "session_init":
-        tabData.sessionId = msg.sessionId;
+        winData.sessionId = msg.sessionId;
         if (msg.agentInfo) {
-          appendSystemMessage(tabData, msg.agentInfo.title + " connected");
+          appendSystemMessage(winData, msg.agentInfo.title + " connected");
         }
-        if (!msg.historyLoaded && tabData.sessionSummary) {
-          appendInfoBanner(tabData, "Previous messages not available. " + tabData.sessionSummary);
+        if (!msg.historyLoaded && winData.sessionSummary) {
+          appendInfoBanner(winData, "Previous messages not available. " + winData.sessionSummary);
         }
         emitSessionEvent("agent-session-started", {
           sessionId: msg.sessionId,
-          agent: tabData.agent,
-          cwd: tabData.cwd,
-          title: tabData.title,
+          agent: winData.agent,
+          cwd: winData.cwd,
+          title: winData.title,
         });
         break;
 
       case "update":
-        handleUpdate(tabData, msg);
+        handleUpdate(winData, msg);
         break;
 
       case "turn_complete":
-        finalizeAssistantMessage(tabData);
-        collapseCompletedTools(tabData);
-        tabData.streaming = false;
-        flushMessageQueue(tabData);
-        updateInputState();
+        finalizeAssistantMessage(winData);
+        collapseCompletedTools(winData);
+        winData.streaming = false;
+        flushMessageQueue(winData);
+        updateWindowInputState(winData);
+        renderDock();
         emitSessionEvent("agent-session-updated", {
-          sessionId: tabData.sessionId,
-          streaming: tabData.streaming,
+          sessionId: winData.sessionId,
+          streaming: winData.streaming,
         });
         break;
 
       case "error":
-        appendSystemMessage(tabData, "Error: " + (msg.message || "Unknown error"));
-        tabData.streaming = false;
-        updateInputState();
+        appendSystemMessage(winData, "Error: " + (msg.message || "Unknown error"));
+        winData.streaming = false;
+        updateWindowInputState(winData);
+        renderDock();
         break;
 
       case "auth_required":
-        appendAuthBanner(tabData, msg);
+        appendAuthBanner(winData, msg);
         break;
 
       case "session_terminated":
-        tabData.streaming = false;
-        tabData.terminated = true;
-        appendSessionTerminated(tabData);
-        updateInputState();
+        winData.streaming = false;
+        winData.terminated = true;
+        appendSessionTerminated(winData);
+        updateWindowInputState(winData);
+        renderDock();
         break;
 
       case "session_restarted":
-        tabData.terminated = false;
-        tabData.sessionId = msg.sessionId || tabData.sessionId;
-        appendSystemMessage(tabData, "Session resumed");
+        winData.terminated = false;
+        winData.sessionId = msg.sessionId || winData.sessionId;
+        appendSystemMessage(winData, "Session resumed");
         break;
 
       default:
@@ -281,53 +597,56 @@
     }
   }
 
-  function handleUpdate(tabData, msg) {
+  function handleUpdate(winData, msg) {
     var su = msg.sessionUpdate;
     switch (su) {
       case "agent_message_chunk":
         var text = (msg.content && msg.content.text) || "";
-        if (text) appendAgentText(tabData, text);
+        if (text) appendAgentText(winData, text);
         break;
 
       case "agent_thought_chunk":
         var thought = (msg.content && msg.content.text) || "";
-        if (thought) appendThinking(tabData, thought);
+        if (thought) appendThinking(winData, thought);
         break;
 
       case "user_message_chunk":
         var userText = (msg.content && msg.content.text) || "";
-        if (userText) appendUserBubble(tabData, userText);
+        if (userText) appendUserBubble(winData, userText);
         break;
 
       case "tool_call":
-        renderToolCall(tabData, msg);
+        renderToolCall(winData, msg);
         break;
 
       case "tool_call_update":
-        updateToolCall(tabData, msg);
+        updateToolCall(winData, msg);
         break;
 
       case "usage_update":
-        renderUsage(msg);
+        renderUsage(winData, msg);
         break;
 
       case "plan":
-        renderPlan(tabData, msg.entries || []);
+        renderPlan(winData, msg.entries || []);
         break;
 
       default:
-        // Gracefully ignore unknown update types
         break;
     }
   }
 
   // --- Rendering: User Messages ---
 
-  function appendUserBubble(tabData, text, images) {
-    // Close any open agent message
-    finalizeAssistantMessage(tabData);
+  function scrollToBottom(winData) {
+    if (!winData.$messages) return;
+    winData.$messages.scrollTop = winData.$messages.scrollHeight;
+  }
 
-    var turnIndex = tabData.userTurns.length;
+  function appendUserBubble(winData, text, images) {
+    finalizeAssistantMessage(winData);
+
+    var turnIndex = winData.userTurns.length;
     var bubble = document.createElement("div");
     bubble.className = "chat-bubble user";
     bubble.setAttribute("data-turn-index", turnIndex);
@@ -347,78 +666,76 @@
       textEl.textContent = text;
       bubble.appendChild(textEl);
     }
-    tabData.container.appendChild(bubble);
+    winData.$messages.appendChild(bubble);
 
-    tabData.userTurns.push({ index: turnIndex, element: bubble, text: text || "(image)" });
-    renderTurnSidebar(tabData);
-    scrollToBottom();
+    winData.userTurns.push({ index: turnIndex, element: bubble, text: text || "(image)" });
+    renderTurnSidebar(winData);
+    scrollToBottom(winData);
   }
 
   // --- Rendering: Agent Text (streaming) ---
 
-  function appendAgentText(tabData, text) {
-    // Close thinking if open
-    finalizeThinking(tabData);
+  function appendAgentText(winData, text) {
+    finalizeThinking(winData);
 
-    tabData.currentTextAccum += text;
-    if (!tabData.currentTextEl) {
+    winData.currentTextAccum += text;
+    if (!winData.currentTextEl) {
       var bubble = document.createElement("div");
       bubble.className = "chat-bubble assistant";
       var content = document.createElement("div");
       content.className = "chat-md-content";
       bubble.appendChild(content);
-      tabData.container.appendChild(bubble);
-      tabData.currentTextEl = content;
+      winData.$messages.appendChild(bubble);
+      winData.currentTextEl = content;
     }
-    scheduleRender(tabData);
+    scheduleRender(winData);
   }
 
-  function scheduleRender(tabData) {
-    if (tabData.renderScheduled) return;
-    tabData.renderScheduled = true;
+  function scheduleRender(winData) {
+    if (winData.renderScheduled) return;
+    winData.renderScheduled = true;
     requestAnimationFrame(function () {
-      tabData.renderScheduled = false;
-      if (tabData.currentTextEl) {
-        tabData.currentTextEl.innerHTML = renderMarkdown(tabData.currentTextAccum);
+      winData.renderScheduled = false;
+      if (winData.currentTextEl) {
+        winData.currentTextEl.innerHTML = renderMarkdown(winData.currentTextAccum);
       }
-      scrollToBottom();
+      scrollToBottom(winData);
     });
   }
 
-  function finalizeAssistantMessage(tabData) {
-    if (tabData.currentTextEl && tabData.currentTextAccum) {
-      tabData.currentTextEl.innerHTML = renderMarkdown(tabData.currentTextAccum);
+  function finalizeAssistantMessage(winData) {
+    if (winData.currentTextEl && winData.currentTextAccum) {
+      winData.currentTextEl.innerHTML = renderMarkdown(winData.currentTextAccum);
     }
-    tabData.currentTextEl = null;
-    tabData.currentTextAccum = "";
-    finalizeThinking(tabData);
+    winData.currentTextEl = null;
+    winData.currentTextAccum = "";
+    finalizeThinking(winData);
   }
 
   // --- Rendering: Thinking ---
 
-  function appendThinking(tabData, text) {
-    tabData.thinkingAccum += text;
-    if (!tabData.thinkingEl) {
+  function appendThinking(winData, text) {
+    winData.thinkingAccum += text;
+    if (!winData.thinkingEl) {
       var block = document.createElement("details");
       block.className = "chat-thinking";
       block.innerHTML = "<summary>Thinking...</summary><div class='chat-thinking-content'></div>";
-      tabData.container.appendChild(block);
-      tabData.thinkingEl = block.querySelector(".chat-thinking-content");
+      winData.$messages.appendChild(block);
+      winData.thinkingEl = block.querySelector(".chat-thinking-content");
     }
-    tabData.thinkingEl.textContent = tabData.thinkingAccum;
-    scrollToBottom();
+    winData.thinkingEl.textContent = winData.thinkingAccum;
+    scrollToBottom(winData);
   }
 
-  function finalizeThinking(tabData) {
-    tabData.thinkingEl = null;
-    tabData.thinkingAccum = "";
+  function finalizeThinking(winData) {
+    winData.thinkingEl = null;
+    winData.thinkingAccum = "";
   }
 
   // --- Rendering: Tool Calls ---
 
-  function renderToolCall(tabData, tc) {
-    // Close any open text/thinking so the tool card appears between bubbles
-    finalizeAssistantMessage(tabData);
+  function renderToolCall(winData, tc) {
+    finalizeAssistantMessage(winData);
 
     var card = document.createElement("details");
     card.className = "chat-tool-card";
@@ -426,7 +743,7 @@
 
     var status = tc.status || "pending";
     var kind = tc.kind || "other";
-    var icon = TOOL_ICONS[kind] || "&#128295;"; // wrench default
+    var icon = TOOL_ICONS[kind] || "&#128295;";
     var title = tc.title || "Tool call";
     var locationText = "";
     if (tc.locations && tc.locations.length > 0) {
@@ -444,17 +761,16 @@
       "</summary>" +
       '<div class="chat-tool-body"></div>';
 
-    tabData.container.appendChild(card);
-    scrollToBottom();
+    winData.$messages.appendChild(card);
+    scrollToBottom(winData);
   }
 
-  function updateToolCall(tabData, update) {
-    var card = tabData.container.querySelector(
+  function updateToolCall(winData, update) {
+    var card = winData.$messages.querySelector(
       '.chat-tool-card[data-tool-id="' + (update.toolCallId || "") + '"]'
     );
     if (!card) return;
 
-    // Update status badge
     if (update.status) {
       var badge = card.querySelector(".chat-tool-status");
       if (badge) {
@@ -463,7 +779,6 @@
       }
     }
 
-    // Append content
     if (update.content && update.content.length > 0) {
       var body = card.querySelector(".chat-tool-body");
       if (body) {
@@ -482,7 +797,7 @@
         });
       }
     }
-    scrollToBottom();
+    scrollToBottom(winData);
   }
 
   function renderDiff(container, diff) {
@@ -495,7 +810,6 @@
 
     var pre = document.createElement("pre");
     pre.className = "chat-diff-content";
-    // Simple diff display: show newText (the result)
     pre.textContent = diff.newText || "";
     el.appendChild(pre);
     container.appendChild(el);
@@ -503,9 +817,8 @@
 
   // --- Rendering: Plan ---
 
-  function renderPlan(tabData, entries) {
-    // Remove any existing plan
-    var existing = tabData.container.querySelector(".chat-plan");
+  function renderPlan(winData, entries) {
+    var existing = winData.$messages.querySelector(".chat-plan");
     if (existing) existing.parentNode.removeChild(existing);
 
     if (!entries.length) return;
@@ -522,14 +835,15 @@
       list.appendChild(li);
     });
     el.appendChild(list);
-    tabData.container.appendChild(el);
-    scrollToBottom();
+    winData.$messages.appendChild(el);
+    scrollToBottom(winData);
   }
 
   // --- Rendering: Usage ---
 
-  function renderUsage(msg) {
-    if (!$chatCost) return;
+  function renderUsage(winData, msg) {
+    var $cost = winData.$cost;
+    if (!$cost) return;
     var parts = [];
 
     if (msg.cost && msg.cost.amount != null) {
@@ -544,14 +858,14 @@
     }
 
     if (parts.length > 0) {
-      $chatCost.textContent = parts.join(" | ");
-      $chatCost.classList.remove("hidden", "context-warn", "context-critical");
+      $cost.textContent = parts.join(" | ");
+      $cost.classList.remove("hidden", "context-warn", "context-critical");
       if (msg.used != null && msg.size != null && msg.size > 0) {
-        var pct = (msg.used / msg.size) * 100;
-        if (pct >= 90) {
-          $chatCost.classList.add("context-critical");
-        } else if (pct >= 75) {
-          $chatCost.classList.add("context-warn");
+        var pct2 = (msg.used / msg.size) * 100;
+        if (pct2 >= 90) {
+          $cost.classList.add("context-critical");
+        } else if (pct2 >= 75) {
+          $cost.classList.add("context-warn");
         }
       }
     }
@@ -559,24 +873,23 @@
 
   // --- Turn Navigation Sidebar ---
 
-  var $turnSidebar = document.getElementById("chat-turn-sidebar");
-
-  function renderTurnSidebar(tabData) {
-    if (!$turnSidebar) return;
-    var list = $turnSidebar.querySelector(".turn-list");
+  function renderTurnSidebar(winData) {
+    var sidebar = winData.$turnSidebar;
+    if (!sidebar) return;
+    var list = sidebar.querySelector(".turn-list");
     if (list) list.innerHTML = "";
-    var turns = tabData.userTurns;
+    var turns = winData.userTurns;
     if (turns.length === 0) {
-      $turnSidebar.classList.add("hidden");
+      sidebar.classList.add("hidden");
       return;
     }
 
-    $turnSidebar.classList.remove("hidden");
+    sidebar.classList.remove("hidden");
     if (!list) return;
 
     turns.forEach(function (turn) {
       var item = document.createElement("div");
-      item.className = "turn-item" + (turn.index === tabData.activeTurnIndex ? " active" : "");
+      item.className = "turn-item" + (turn.index === winData.activeTurnIndex ? " active" : "");
       item.setAttribute("data-turn-index", turn.index);
 
       var label = document.createElement("span");
@@ -591,62 +904,58 @@
       item.appendChild(label);
       item.appendChild(preview);
       item.addEventListener("click", function () {
-        jumpToTurn(tabData, turn.index);
+        jumpToTurn(winData, turn.index);
       });
       list.appendChild(item);
     });
 
-    // Update counter
-    var counter = $turnSidebar.querySelector(".turn-counter");
+    var counter = sidebar.querySelector(".turn-counter");
     if (counter) {
-      var current = tabData.activeTurnIndex >= 0 ? (tabData.activeTurnIndex + 1) : "-";
+      var current = winData.activeTurnIndex >= 0 ? (winData.activeTurnIndex + 1) : "-";
       counter.textContent = current + " / " + turns.length;
     }
   }
 
-  function jumpToTurn(tabData, turnIndex) {
-    var turns = tabData.userTurns;
+  function jumpToTurn(winData, turnIndex) {
+    var turns = winData.userTurns;
     if (turnIndex < 0 || turnIndex >= turns.length) return;
 
-    tabData.activeTurnIndex = turnIndex;
+    winData.activeTurnIndex = turnIndex;
     var el = turns[turnIndex].element;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    // Brief highlight flash
     el.classList.add("turn-highlight");
     setTimeout(function () { el.classList.remove("turn-highlight"); }, 1500);
 
-    renderTurnSidebar(tabData);
+    renderTurnSidebar(winData);
   }
 
-  function jumpToPreviousTurn(tabData) {
-    if (!tabData || tabData.userTurns.length === 0) return;
-    var next = tabData.activeTurnIndex <= 0 ? 0 : tabData.activeTurnIndex - 1;
-    jumpToTurn(tabData, next);
+  function jumpToPreviousTurn(winData) {
+    if (!winData || winData.userTurns.length === 0) return;
+    var next = winData.activeTurnIndex <= 0 ? 0 : winData.activeTurnIndex - 1;
+    jumpToTurn(winData, next);
   }
 
-  function jumpToNextTurn(tabData) {
-    if (!tabData || tabData.userTurns.length === 0) return;
-    var max = tabData.userTurns.length - 1;
-    var next = tabData.activeTurnIndex >= max ? max : tabData.activeTurnIndex + 1;
-    jumpToTurn(tabData, next);
+  function jumpToNextTurn(winData) {
+    if (!winData || winData.userTurns.length === 0) return;
+    var max = winData.userTurns.length - 1;
+    var next = winData.activeTurnIndex >= max ? max : winData.activeTurnIndex + 1;
+    jumpToTurn(winData, next);
   }
 
-  // Toggle sidebar visibility
-  function toggleTurnSidebar() {
-    if (!$turnSidebar) return;
-    $turnSidebar.classList.toggle("collapsed");
+  function toggleTurnSidebar(winData) {
+    if (!winData.$turnSidebar) return;
+    winData.$turnSidebar.classList.toggle("collapsed");
   }
 
   // --- Tool Collapsing ---
 
-  function collapseCompletedTools(tabData) {
-    var container = tabData.container;
+  function collapseCompletedTools(winData) {
+    var container = winData.$messages;
     var children = Array.from(container.children);
     var i = 0;
 
     while (i < children.length) {
-      // Find runs of consecutive completed tool cards
       if (isCompletedToolCard(children[i])) {
         var runStart = i;
         while (i < children.length && isCompletedToolCard(children[i])) {
@@ -660,7 +969,6 @@
           summary.textContent = runLength + " tool calls completed";
           details.appendChild(summary);
 
-          // Insert the details element before the first card in the run
           container.insertBefore(details, children[runStart]);
           for (var j = runStart; j < runStart + runLength; j++) {
             details.appendChild(children[j]);
@@ -680,62 +988,62 @@
 
   // --- Rendering: System / Info / Auth ---
 
-  function appendSystemMessage(tabData, text) {
+  function appendSystemMessage(winData, text) {
     var el = document.createElement("div");
     el.className = "chat-system-msg";
     el.textContent = text;
-    tabData.container.appendChild(el);
-    scrollToBottom();
+    winData.$messages.appendChild(el);
+    scrollToBottom(winData);
   }
 
-  function appendInfoBanner(tabData, text) {
+  function appendInfoBanner(winData, text) {
     var el = document.createElement("div");
     el.className = "chat-info-banner";
     el.textContent = text;
-    tabData.container.appendChild(el);
-    scrollToBottom();
+    winData.$messages.appendChild(el);
+    scrollToBottom(winData);
   }
 
-  function appendSessionTerminated(tabData) {
+  function appendSessionTerminated(winData) {
     var el = document.createElement("div");
     el.className = "chat-system-msg chat-terminated";
-    el.textContent = "Session ended — send a message to resume";
-    tabData.container.appendChild(el);
-    scrollToBottom();
+    el.textContent = "Session ended \u2014 send a message to resume";
+    winData.$messages.appendChild(el);
+    scrollToBottom(winData);
   }
 
-  function appendAuthBanner(tabData, msg) {
+  function appendAuthBanner(winData, msg) {
     var el = document.createElement("div");
     el.className = "chat-auth-banner";
     el.innerHTML =
       '<div class="chat-auth-text">' + escapeHtml(msg.message || "Authentication required") + "</div>" +
       '<button class="chat-auth-retry">Retry</button>';
     el.querySelector(".chat-auth-retry").addEventListener("click", function () {
-      if (tabData.ws && tabData.ws.readyState === WebSocket.OPEN) {
-        tabData.ws.send(JSON.stringify({ type: "retry" }));
+      if (winData.ws && winData.ws.readyState === WebSocket.OPEN) {
+        winData.ws.send(JSON.stringify({ type: "retry" }));
         el.parentNode.removeChild(el);
       }
     });
-    tabData.container.appendChild(el);
-    scrollToBottom();
+    winData.$messages.appendChild(el);
+    scrollToBottom(winData);
   }
 
   // --- Input Handling ---
 
-  function sendUserMessage() {
-    if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
-    var tab = chatTabs[activeChatTabId];
+  function sendWindowMessage(winId) {
+    var win = chatWindows[winId];
+    if (!win) return;
 
-    var text = $chatInput.value.trim();
-    var images = tab.pendingImages.slice();
+    var text = win.$input.value.trim();
+    var images = win.pendingImages.slice();
     if (!text && !images.length) return;
-    $chatInput.value = "";
-    $chatInput.style.height = "auto";
+    win.$input.value = "";
+    win.$input.style.height = "auto";
 
-    appendUserBubble(tab, text, images);
-    tab.pendingImages = [];
-    renderImagePreview();
-    updateInputPlaceholder();
+    appendUserBubble(win, text, images);
+    win.pendingImages = [];
+    renderImagePreview(win);
+    updateInputPlaceholder(win);
 
     var queuedMsg = { type: "user_message", text: text };
     if (images.length) {
@@ -744,149 +1052,105 @@
       });
     }
 
-    if (tab.streaming) {
-      if (!tab.messageQueue) tab.messageQueue = [];
-      tab.messageQueue.push(queuedMsg);
-      updateInputState();
+    if (win.streaming) {
+      if (!win.messageQueue) win.messageQueue = [];
+      win.messageQueue.push(queuedMsg);
+      updateWindowInputState(win);
       return;
     }
 
-    sendToAgent(tab, queuedMsg);
+    sendToAgent(win, queuedMsg);
   }
 
-  function sendToAgent(tab, msg) {
-    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
-      tab.ws.send(JSON.stringify(msg));
-      tab.streaming = true;
-      updateInputState();
+  function sendToAgent(win, msg) {
+    if (win.ws && win.ws.readyState === WebSocket.OPEN) {
+      win.ws.send(JSON.stringify(msg));
+      win.streaming = true;
+      updateWindowInputState(win);
+      renderDock();
       emitSessionEvent("agent-session-updated", {
-        sessionId: tab.sessionId,
+        sessionId: win.sessionId,
         streaming: true,
       });
     }
   }
 
-  function flushMessageQueue(tab) {
-    if (!tab.messageQueue || tab.messageQueue.length === 0) return;
-    var next = tab.messageQueue.shift();
-    sendToAgent(tab, next);
+  function flushMessageQueue(win) {
+    if (!win.messageQueue || win.messageQueue.length === 0) return;
+    var next = win.messageQueue.shift();
+    sendToAgent(win, next);
   }
 
-  function cancelAgent() {
-    if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
-    var tab = chatTabs[activeChatTabId];
-    if (!tab.streaming) return;
-    if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
-      tab.ws.send(JSON.stringify({ type: "cancel" }));
+  function cancelWindowAgent(winId) {
+    var win = chatWindows[winId];
+    if (!win || !win.streaming) return;
+    if (win.ws && win.ws.readyState === WebSocket.OPEN) {
+      win.ws.send(JSON.stringify({ type: "cancel" }));
     }
-    tab.messageQueue = [];
-    tab.streaming = false;
-    appendSystemMessage(tab, "Cancelled by user");
-    finalizeAssistantMessage(tab);
-    updateInputState();
+    win.messageQueue = [];
+    win.streaming = false;
+    appendSystemMessage(win, "Cancelled by user");
+    finalizeAssistantMessage(win);
+    updateWindowInputState(win);
+    renderDock();
   }
 
-  function updateInputState() {
-    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
-    var streaming = tab && tab.streaming;
-    var queued = tab && tab.messageQueue && tab.messageQueue.length > 0;
-    $chatInput.disabled = false;
-    // Show stop button during streaming, send button otherwise
+  function updateWindowInputState(winData) {
+    var streaming = winData.streaming;
+    var queued = winData.messageQueue && winData.messageQueue.length > 0;
+    winData.$input.disabled = false;
     if (streaming) {
-      $chatSend.classList.add("hidden");
-      $chatStop.classList.remove("hidden");
+      winData.$send.classList.add("hidden");
+      winData.$stop.classList.remove("hidden");
     } else {
-      $chatSend.classList.remove("hidden");
-      $chatStop.classList.add("hidden");
+      winData.$send.classList.remove("hidden");
+      winData.$stop.classList.add("hidden");
     }
     if (streaming && queued) {
-      $chatInput.placeholder = queued + " queued...";
+      winData.$input.placeholder = queued + " queued...";
     } else if (streaming) {
-      $chatInput.placeholder = "Agent working... Esc to stop";
-    } else if (tab && tab.terminated) {
-      $chatInput.placeholder = "Send a message to resume session...";
+      winData.$input.placeholder = "Agent working... Esc to stop";
+    } else if (winData.terminated) {
+      winData.$input.placeholder = "Send a message to resume session...";
     } else {
-      $chatInput.placeholder = "Send a message...";
+      winData.$input.placeholder = "Send a message...";
     }
   }
 
-  // Auto-grow textarea
-  $chatInput.addEventListener("input", function () {
-    this.style.height = "auto";
-    this.style.height = Math.min(this.scrollHeight, 150) + "px";
-  });
+  // --- Image Handling ---
 
-  // Enter to send, Shift+Enter for newline, Esc to stop
-  $chatInput.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendUserMessage();
-    } else if (e.key === "Escape") {
-      var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
-      if (tab && tab.streaming) {
-        e.preventDefault();
-        cancelAgent();
-      }
-    }
-  });
-
-  $chatStop.addEventListener("click", cancelAgent);
-
-  $chatSend.addEventListener("click", sendUserMessage);
-
-  // --- Image Paste ---
-
-  $chatInput.addEventListener("paste", function (e) {
-    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
-    if (!tab || tab.streaming) return;
-
-    var items = e.clipboardData && e.clipboardData.items;
-    if (!items) return;
-
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf("image/") === 0) {
-        e.preventDefault();
-        var file = items[i].getAsFile();
-        if (!file) continue;
-        readImageFile(tab, file);
-      }
-    }
-  });
-
-  function readImageFile(tab, file) {
+  function readImageFile(winData, file) {
     var reader = new FileReader();
     reader.onload = function () {
-      // result is "data:<mimeType>;base64,<data>"
       var parts = reader.result.split(",");
       var mimeType = file.type || "image/png";
       var data = parts[1];
-      tab.pendingImages.push({ data: data, mimeType: mimeType });
-      renderImagePreview();
-      updateInputPlaceholder();
+      winData.pendingImages.push({ data: data, mimeType: mimeType });
+      renderImagePreview(winData);
+      updateInputPlaceholder(winData);
     };
     reader.readAsDataURL(file);
   }
 
-  function updateInputPlaceholder() {
-    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
-    if (!tab || tab.streaming || tab.terminated) return;
-    var n = tab.pendingImages.length;
+  function updateInputPlaceholder(winData) {
+    if (winData.streaming || winData.terminated) return;
+    var n = winData.pendingImages.length;
     if (n > 0) {
-      $chatInput.placeholder = n + " image" + (n > 1 ? "s" : "") + " attached — add text or press Enter to send";
+      winData.$input.placeholder = n + " image" + (n > 1 ? "s" : "") + " attached \u2014 add text or press Enter to send";
     } else {
-      $chatInput.placeholder = "Send a message...";
+      winData.$input.placeholder = "Send a message...";
     }
   }
 
-  function renderImagePreview() {
-    var tab = activeChatTabId ? chatTabs[activeChatTabId] : null;
-    $imagePreview.innerHTML = "";
-    if (!tab || !tab.pendingImages.length) {
-      $imagePreview.classList.remove("active");
+  function renderImagePreview(winData) {
+    var $preview = winData.$imagePreview;
+    $preview.innerHTML = "";
+    if (!winData.pendingImages.length) {
+      $preview.classList.remove("active");
       return;
     }
-    $imagePreview.classList.add("active");
-    tab.pendingImages.forEach(function (img, idx) {
+    $preview.classList.add("active");
+    winData.pendingImages.forEach(function (img, idx) {
       var thumb = document.createElement("div");
       thumb.className = "image-preview-thumb";
       var imgEl = document.createElement("img");
@@ -895,82 +1159,44 @@
       var removeBtn = document.createElement("button");
       removeBtn.className = "image-preview-remove";
       removeBtn.textContent = "\u00d7";
-      removeBtn.setAttribute("data-idx", idx);
       removeBtn.addEventListener("click", function () {
-        tab.pendingImages.splice(idx, 1);
-        renderImagePreview();
-        updateInputPlaceholder();
+        winData.pendingImages.splice(idx, 1);
+        renderImagePreview(winData);
+        updateInputPlaceholder(winData);
       });
       thumb.appendChild(removeBtn);
-      $imagePreview.appendChild(thumb);
+      $preview.appendChild(thumb);
     });
   }
 
-
-  // Turn navigation keyboard shortcuts (Ctrl+Up/Down)
-  document.addEventListener("keydown", function (e) {
-    if (!activeChatTabId || !chatTabs[activeChatTabId]) return;
-    var tab = chatTabs[activeChatTabId];
-    if (!$chatPanel || $chatPanel.classList.contains("hidden")) return;
-
-    if (e.ctrlKey && e.key === "ArrowUp") {
-      e.preventDefault();
-      jumpToPreviousTurn(tab);
-    } else if (e.ctrlKey && e.key === "ArrowDown") {
-      e.preventDefault();
-      jumpToNextTurn(tab);
-    } else if (e.ctrlKey && e.key === "t") {
-      e.preventDefault();
-      toggleTurnSidebar();
-    }
-  });
-
-  $chatClose.addEventListener("click", function () {
-    // Close all tabs
-    Object.keys(chatTabs).forEach(function (tabId) {
-      var tab = chatTabs[tabId];
-      if (tab.ws && tab.ws.readyState === WebSocket.OPEN) tab.ws.close();
-      if (tab.container && tab.container.parentNode) tab.container.parentNode.removeChild(tab.container);
-    });
-    chatTabs = {};
-    activeChatTabId = null;
-    $chatPanel.classList.add("hidden");
-    if ($turnSidebar) $turnSidebar.classList.add("hidden");
-    document.body.classList.remove("chat-open");
-    renderChatTabs();
-  });
-
-
-  // --- Public API (called from app.js) ---
-
-  // --- Custom Events for dashboard integration ---
+  // --- Custom Events ---
 
   function emitSessionEvent(eventName, detail) {
     window.dispatchEvent(new CustomEvent(eventName, { detail: detail }));
   }
 
+  // --- Public API (called from app.js) ---
+
   window.AgentChat = {
-    // Returns set of sessionIds that have open chat tabs
     getActiveSessionIds: function () {
       var ids = new Set();
-      Object.keys(chatTabs).forEach(function (tabId) {
-        var tab = chatTabs[tabId];
-        if (tab.sessionId) ids.add(tab.sessionId);
+      Object.keys(chatWindows).forEach(function (id) {
+        var win = chatWindows[id];
+        if (win.sessionId) ids.add(win.sessionId);
       });
       return ids;
     },
 
-    // Returns info about active tabs keyed by sessionId
     getActiveSessions: function () {
       var sessions = {};
-      Object.keys(chatTabs).forEach(function (tabId) {
-        var tab = chatTabs[tabId];
-        if (tab.sessionId) {
-          sessions[tab.sessionId] = {
-            streaming: tab.streaming,
-            agent: tab.agent,
-            cwd: tab.cwd,
-            title: tab.title,
+      Object.keys(chatWindows).forEach(function (id) {
+        var win = chatWindows[id];
+        if (win.sessionId) {
+          sessions[win.sessionId] = {
+            streaming: win.streaming,
+            agent: win.agent,
+            cwd: win.cwd,
+            title: win.title,
           };
         }
       });
@@ -978,27 +1204,33 @@
     },
 
     openChat: function (session) {
-      // Check for existing tab with same session
-      var ids = Object.keys(chatTabs);
+      // Check for existing window with same session
+      var ids = Object.keys(chatWindows);
       for (var i = 0; i < ids.length; i++) {
-        if (chatTabs[ids[i]].sessionId === session.id) {
-          switchChatTab(ids[i]);
+        var win = chatWindows[ids[i]];
+        if (win.sessionId === session.id) {
+          if (win.windowState === "minimized") {
+            restoreWindow(ids[i]);
+          } else {
+            focusWindow(ids[i]);
+          }
           return;
         }
       }
       var agent = session.source || "claude";
       var title = session.summary || session.id.substring(0, 8);
-      createChatTab(title, agent, session.cwd, session.id, session.summary);
+      createChatWindow(title, agent, session.cwd, session.id, session.summary);
     },
 
     openNewChat: function (cwd, agent) {
       agent = agent || localStorage.getItem("ak-default-agent") || "claude";
       var displayName = cwd.split("/").filter(Boolean).pop() || cwd;
-      createChatTab("New: " + displayName, agent, cwd, null, null);
+      createChatWindow("New: " + displayName, agent, cwd, null, null);
     },
   };
 
-  // Exposed for testing — not part of the public API
+  // --- Test Internals ---
+
   window._chatInternals = {
     handleServerMessage: handleServerMessage,
     handleUpdate: handleUpdate,
@@ -1007,9 +1239,12 @@
     finalizeAssistantMessage: finalizeAssistantMessage,
     renderToolCall: renderToolCall,
     collapseCompletedTools: collapseCompletedTools,
-    sendUserMessage: sendUserMessage,
-    switchChatTab: switchChatTab,
-    updateInputState: updateInputState,
+    sendWindowMessage: sendWindowMessage,
+    updateWindowInputState: updateWindowInputState,
+    focusWindow: focusWindow,
+    minimizeWindow: minimizeWindow,
+    restoreWindow: restoreWindow,
+    maximizeWindow: maximizeWindow,
     buildMessagePayload: function (text, images) {
       var msg = { type: "user_message", text: text };
       if (images && images.length) {
@@ -1020,16 +1255,27 @@
       return msg;
     },
     getState: function () {
-      return { chatTabs: chatTabs, activeChatTabId: activeChatTabId };
+      return { chatWindows: chatWindows, focusedWindowId: focusedWindowId };
     },
-    createTabData: function (container) {
+    createWinData: function (messagesContainer) {
+      var inputEl = messagesContainer.ownerDocument.createElement("textarea");
+      var sendEl = messagesContainer.ownerDocument.createElement("button");
+      var stopEl = messagesContainer.ownerDocument.createElement("button");
+      stopEl.classList.add("hidden");
+      var costEl = messagesContainer.ownerDocument.createElement("span");
+      costEl.classList.add("hidden");
+      var previewEl = messagesContainer.ownerDocument.createElement("div");
+      var sidebarEl = messagesContainer.ownerDocument.createElement("div");
+      sidebarEl.classList.add("hidden");
+      sidebarEl.innerHTML = '<div class="turn-sidebar-header"><span class="turn-sidebar-title">Turns</span><span class="turn-counter">-</span></div><div class="turn-list"></div>';
+
       return {
-        id: "test-tab",
+        id: "test-win",
+        el: messagesContainer.ownerDocument.createElement("div"),
         ws: null,
         sessionId: null,
         agent: "claude",
         cwd: "/tmp",
-        container: container,
         title: "Test",
         streaming: false,
         messageQueue: [],
@@ -1042,6 +1288,16 @@
         userTurns: [],
         activeTurnIndex: -1,
         pendingImages: [],
+        windowState: "floating",
+        x: 0, y: 0, width: 500, height: 400,
+        unreadCount: 0,
+        $messages: messagesContainer,
+        $input: inputEl,
+        $send: sendEl,
+        $stop: stopEl,
+        $cost: costEl,
+        $imagePreview: previewEl,
+        $turnSidebar: sidebarEl,
       };
     },
   };
