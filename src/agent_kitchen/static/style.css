@@ -1310,6 +1310,7 @@ body.terminal-open .content {
   font-size: 14px;
   line-height: 1.5;
   word-wrap: break-word;
+  white-space: pre-wrap;
   box-shadow: 0 1px 3px rgba(255, 77, 0, 0.2);
 }
 
