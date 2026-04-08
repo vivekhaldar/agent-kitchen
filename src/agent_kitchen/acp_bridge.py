@@ -1,7 +1,9 @@
 # ABOUTME: ACP bridge that spawns coding agents via the Agent Client Protocol.
 # ABOUTME: Manages agent subprocess lifecycle and relays updates to a callback.
 
+import asyncio
 import logging
+import shutil
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
@@ -16,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Map agent names to their ACP spawn commands
 AGENT_COMMANDS: dict[str, list[str]] = {
-    "claude": ["npx", "@agentclientprotocol/claude-agent-acp"],
+    "claude": ["claude-agent-acp"],
     "codex": ["npx", "@zed-industries/codex-acp"],
     "copilot": ["npx", "@github/copilot-language-server", "--acp"],
     "gemini": ["npx", "@google/gemini-cli", "--experimental-acp"],
@@ -132,12 +134,21 @@ class ACPBridge:
             return False
         return getattr(self._agent_caps, "load_session", False)
 
+    _INIT_TIMEOUT = 30  # seconds to wait for agent process to initialize
+
     async def start(self, session_id: str | None = None) -> dict:
         """Spawn agent, initialize, create/load session.
 
         Returns {"sessionId": str, "historyLoaded": bool, "agentInfo": dict}.
         Raises AuthRequiredError if agent needs authentication.
         """
+        # Pre-flight: verify the agent command is executable
+        cmd = self._agent_command[0]
+        if not shutil.which(cmd):
+            raise RuntimeError(
+                f"Agent command not found: {cmd}. Is the agent installed and on PATH?"
+            )
+
         client = KitchenACPClient(self._on_update, self._cwd, self._auto_approve)
 
         # 10MB buffer — the default 64KB is too small for large file reads
@@ -146,15 +157,26 @@ class ACPBridge:
         )
         self._conn, self._proc = await self._ctx.__aenter__()
 
-        result = await self._conn.initialize(
-            protocol_version=acp.PROTOCOL_VERSION,
-            client_capabilities=ClientCapabilities(
-                fs={"readTextFile": True, "writeTextFile": True}
-            ),
-            client_info=Implementation(
-                name="agent-kitchen", title="Agent Kitchen", version="0.1.0"
-            ),
-        )
+        try:
+            result = await asyncio.wait_for(
+                self._conn.initialize(
+                    protocol_version=acp.PROTOCOL_VERSION,
+                    client_capabilities=ClientCapabilities(
+                        fs={"readTextFile": True, "writeTextFile": True}
+                    ),
+                    client_info=Implementation(
+                        name="agent-kitchen", title="Agent Kitchen", version="0.1.0"
+                    ),
+                ),
+                timeout=self._INIT_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            await self.close()
+            raise RuntimeError(
+                f"Agent process failed to initialize within {self._INIT_TIMEOUT}s. "
+                "The process may have crashed on startup — check that the agent is "
+                "installed correctly."
+            )
         self._agent_caps = result.agentCapabilities
         self._agent_info = result.agentInfo
         logger.info(

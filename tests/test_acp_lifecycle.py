@@ -9,6 +9,20 @@ import pytest
 from agent_kitchen.acp_bridge import ACPBridge
 
 
+class TestStartPreflight:
+    """ACPBridge.start() should fail fast when the agent command is missing."""
+
+    @pytest.mark.asyncio
+    async def test_start_fails_when_command_not_found(self):
+        bridge = ACPBridge(
+            agent_command=["nonexistent-agent-binary-xyz"],
+            cwd="/tmp",
+            on_update=AsyncMock(),
+        )
+        with pytest.raises(RuntimeError, match="Agent command not found"):
+            await bridge.start()
+
+
 class TestIsAlive:
     """ACPBridge.is_alive should reflect the actual process state."""
 
