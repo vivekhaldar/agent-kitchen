@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "aac62969ac56",
+  "session_id": "f40098e0-0d62-4701-b877-bd5e310a5147",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-08T03:10:16.548292Z",
+  "branch": "feature/rich-chat-view",
+  "checkpoints_count": 0,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "turn_id": "f403d45a0d94",
+  "checkpoint_transcript_start": 143,
+  "transcript_lines_at_start": 143,
+  "token_usage": {
+    "input_tokens": 27,
+    "cache_creation_tokens": 89279,
+    "cache_read_tokens": 1869448,
+    "output_tokens": 6061,
+    "api_call_count": 21
+  },
+  "session_metrics": {
+    "turn_count": 4
+  }
+}
