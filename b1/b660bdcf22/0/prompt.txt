@@ -1,0 +1,1 @@
+ok the ui is getting unwieldy when there are many open agent chats. i want to steer the ui towards a messaging app-like experience, with chat windows that can be minimized and maximized and re-arranged. create a new feature branch then brainstorm how to do that.
