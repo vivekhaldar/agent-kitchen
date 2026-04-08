@@ -1,0 +1,12 @@
+a few feature requests:
+- instead of waiting for a bulk refresh, when i hit "+" to start a new agent, a new line for it should get populated in the agent list under its group right away. as the agent progresses and gets a proper description the line should get updated
+- agents that are currently running/active in the page should have some visual indication in the list
+- when i hit "+" it starts a claude code agent by default but i need a way to optionally start codex sessions too
+
+---
+
+the visual indicator for active sessions is completely messed up
+
+---
+
+ok new sessions are showing up, but when i resume an existing session it shows up twice
