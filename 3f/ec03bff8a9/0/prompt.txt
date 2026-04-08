@@ -1,0 +1,1 @@
+i also need a stop/interrupt mechanism. a stop button, but also perhaps hitting "esc"
