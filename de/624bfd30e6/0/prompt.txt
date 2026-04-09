@@ -1,0 +1,13 @@
+what is the git status here?
+
+---
+
+ok i really like the floating windows. but the main list of sessions in the middle now looks weird. what do you recommend?
+
+---
+
+then do they need to be floating or can we go back to some tab structure? vertical would be better. i want the running agents to have more vertical space
+
+---
+
+yes

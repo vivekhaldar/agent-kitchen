@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "de624bfd30e6",
+  "session_id": "4752bf1a-def6-4b3c-a25b-df610e2b185a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-09T00:35:41.067496Z",
+  "branch": "feature/chat-windows",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/agent_kitchen/static/chat.js",
+    "src/agent_kitchen/static/index.html",
+    "src/agent_kitchen/static/style.css",
+    "tests/test_chat.mjs",
+    "src/agent_kitchen/static/app.js"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "878efa09f1c9",
+  "checkpoint_transcript_start": 172,
+  "transcript_lines_at_start": 172,
+  "token_usage": {
+    "input_tokens": 58,
+    "cache_creation_tokens": 275304,
+    "cache_read_tokens": 6880465,
+    "output_tokens": 34948,
+    "api_call_count": 50
+  },
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-09T00:35:40.619261Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 996,
+    "human_removed": 127,
+    "total_committed": 0,
+    "agent_percentage": 0
+  }
+}
