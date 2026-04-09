@@ -1,0 +1,3 @@
+a few visual nits:
+- the pills that say "CLAUDE" etc don't cover the whole word
+- the tab headers for the agents--- they're not differentiated enough, and when the name is long, the "x" button doesn't show up
