@@ -947,15 +947,16 @@ body {
 
 .source-badge {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
-  padding: 3px 8px;
+  padding: 2px 7px;
   white-space: nowrap;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-surface);
+  line-height: 1.4;
 }
 
 .source-badge.claude {
