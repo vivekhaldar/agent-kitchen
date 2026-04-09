@@ -1044,8 +1044,66 @@
     } else if (e.key === "Enter" && focusedGroupIdx >= 0) {
       e.preventDefault();
       toggleFocusedGroup();
+    } else if (e.key === "b") {
+      e.preventDefault();
+      toggleSidebar();
     }
   });
+
+  // --- Sidebar Toggle & Resize ---
+
+  var $sidebar = document.getElementById("sidebar");
+  var $sidebarToggle = document.getElementById("sidebar-toggle");
+  var $sidebarResizeHandle = document.getElementById("sidebar-resize-handle");
+
+  function toggleSidebar() {
+    if (!$sidebar) return;
+    $sidebar.classList.toggle("collapsed");
+    if ($sidebarToggle) {
+      $sidebarToggle.innerHTML = $sidebar.classList.contains("collapsed") ? "&raquo;" : "&laquo;";
+    }
+    try { localStorage.setItem("ak-sidebar-collapsed", $sidebar.classList.contains("collapsed")); } catch (e) { /* ignore */ }
+  }
+
+  if ($sidebarToggle) {
+    $sidebarToggle.addEventListener("click", toggleSidebar);
+  }
+
+  // Restore sidebar state
+  try {
+    if (localStorage.getItem("ak-sidebar-collapsed") === "true") {
+      $sidebar.classList.add("collapsed");
+      if ($sidebarToggle) $sidebarToggle.innerHTML = "&raquo;";
+    }
+  } catch (e) { /* ignore */ }
+
+  // Sidebar resize by dragging handle
+  if ($sidebarResizeHandle) {
+    var resizeStartX, resizeStartW;
+    $sidebarResizeHandle.addEventListener("mousedown", function (e) {
+      if ($sidebar.classList.contains("collapsed")) return;
+      e.preventDefault();
+      resizeStartX = e.clientX;
+      resizeStartW = $sidebar.offsetWidth;
+      document.addEventListener("mousemove", onSidebarResize);
+      document.addEventListener("mouseup", onSidebarResizeEnd);
+    });
+    function onSidebarResize(e) {
+      var newW = resizeStartW + (e.clientX - resizeStartX);
+      newW = Math.max(240, Math.min(newW, window.innerWidth * 0.5));
+      $sidebar.style.width = newW + "px";
+    }
+    function onSidebarResizeEnd() {
+      document.removeEventListener("mousemove", onSidebarResize);
+      document.removeEventListener("mouseup", onSidebarResizeEnd);
+      try { localStorage.setItem("ak-sidebar-width", $sidebar.style.width); } catch (e) { /* ignore */ }
+    }
+    // Restore saved width
+    try {
+      var savedW = localStorage.getItem("ak-sidebar-width");
+      if (savedW) $sidebar.style.width = savedW;
+    } catch (e) { /* ignore */ }
+  }
 
   // --- Event listeners ---
 

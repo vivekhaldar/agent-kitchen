@@ -43,40 +43,81 @@
     </div>
   </header>
 
-  <div class="filter-bar" id="filter-bar">
-    <div class="time-segments" id="time-segments">
-      <button class="time-seg" data-days="1">24h</button>
-      <button class="time-seg" data-days="7">7d</button>
-      <button class="time-seg" data-days="30">30d</button>
-      <button class="time-seg active" data-days="0">All</button>
-    </div>
-  </div>
+  <div class="app-layout" id="app-layout">
+    <!-- Left sidebar: session list -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="time-segments" id="time-segments">
+          <button class="time-seg" data-days="1">24h</button>
+          <button class="time-seg" data-days="7">7d</button>
+          <button class="time-seg" data-days="30">30d</button>
+          <button class="time-seg active" data-days="0">All</button>
+        </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">&laquo;</button>
+      </div>
 
-  <main class="content" id="content">
-    <div class="search-hint-bar" id="search-hint-bar">
-      <kbd>/</kbd> to search
-    </div>
-    <div class="loading" id="loading">Loading sessions...</div>
+      <div class="sidebar-search" id="search-hint-bar">
+        <kbd>/</kbd> to search
+      </div>
 
-    <!-- Repo groups rendered here by app.js -->
-    <div id="repo-groups"></div>
+      <div class="sidebar-content" id="content">
+        <div class="loading" id="loading">Loading sessions...</div>
 
-    <!-- Non-repo groups rendered here by app.js -->
-    <div id="non-repo-groups"></div>
+        <!-- Repo groups rendered here by app.js -->
+        <div id="repo-groups"></div>
 
-    <!-- Flat chronological view (hidden by default) -->
-    <div id="chrono-view" class="hidden"></div>
+        <!-- Non-repo groups rendered here by app.js -->
+        <div id="non-repo-groups"></div>
 
-    <!-- Empty state -->
-    <div id="empty-state" class="empty-state hidden">
-      <div class="empty-state-title">No sessions found</div>
-      <div class="empty-state-body">
-        <p>Agent Kitchen looks for sessions in <code>~/.claude</code> and <code>~/.codex</code> directories.</p>
-        <p>Start a Claude Code or Codex CLI session in any git repo, then refresh this page.</p>
-        <p>You can also try increasing the scan range using the <strong>days</strong> input above.</p>
+        <!-- Flat chronological view (hidden by default) -->
+        <div id="chrono-view" class="hidden"></div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state hidden">
+          <div class="empty-state-title">No sessions found</div>
+          <div class="empty-state-body">
+            <p>Agent Kitchen looks for sessions in <code>~/.claude</code> and <code>~/.codex</code> directories.</p>
+            <p>Start a Claude Code or Codex CLI session in any git repo, then refresh this page.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Resize handle between sidebar and chat -->
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
+
+    <!-- Right panel: tabbed chat area -->
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-panel-header" id="chat-panel-header">
+        <div class="chat-tabs" id="chat-tabs"></div>
+        <div class="chat-panel-controls">
+          <span class="chat-cost hidden" id="chat-cost"></span>
+        </div>
+      </div>
+      <div class="chat-body">
+        <div class="chat-turn-sidebar hidden" id="chat-turn-sidebar">
+          <div class="turn-sidebar-header">
+            <span class="turn-sidebar-title">Turns</span>
+            <span class="turn-counter">-</span>
+          </div>
+          <div class="turn-list"></div>
+          <div class="turn-shortcuts">Ctrl+&uarr;/&darr; navigate &middot; Ctrl+T toggle</div>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+      </div>
+      <div class="chat-image-preview" id="chat-image-preview"></div>
+      <div class="chat-input-bar">
+        <textarea id="chat-input" class="chat-input" placeholder="Send a message..." rows="1"></textarea>
+        <button id="chat-send" class="chat-send-btn" aria-label="Send message">&uarr;</button>
+        <button id="chat-stop" class="chat-stop-btn hidden" aria-label="Stop agent" title="Stop (Esc)">&square;</button>
+      </div>
+      <!-- Empty state when no chats open -->
+      <div class="chat-empty" id="chat-empty">
+        <div class="chat-empty-title">No active chats</div>
+        <div class="chat-empty-body">Click a session in the sidebar to open a chat</div>
       </div>
     </div>
-  </main>
+  </div>
 
   <div id="search-overlay" class="search-overlay hidden" role="search" aria-label="Search sessions">
     <div class="search-box" role="dialog" aria-label="Search">
@@ -102,7 +143,8 @@
         <div class="help-row"><kbd>j</kbd><span>Next group</span></div>
         <div class="help-row"><kbd>k</kbd><span>Previous group</span></div>
         <div class="help-row"><kbd>Enter</kbd><span>Expand / collapse group</span></div>
-        <div class="help-row"><kbd>Esc</kbd><span>Close terminal / overlay</span></div>
+        <div class="help-row"><kbd>Esc</kbd><span>Close overlay</span></div>
+        <div class="help-row"><kbd>b</kbd><span>Toggle sidebar</span></div>
       </div>
       <div class="help-dismiss">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
     </div>
@@ -115,10 +157,6 @@
     </div>
     <div id="terminal-container"></div>
   </div>
-
-  <!-- Chat windows are created dynamically by chat.js -->
-  <div id="chat-window-layer" class="chat-window-layer"></div>
-  <div id="chat-dock" class="chat-dock hidden"></div>
 
   <script src="chat.js"></script>
   <script src="app.js"></script>
