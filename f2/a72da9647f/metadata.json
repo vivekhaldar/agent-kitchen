@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "f2a72da9647f",
+  "strategy": "manual-commit",
+  "branch": "feature/chat-windows",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/agent_kitchen/static/style.css"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f2/a72da9647f/0/metadata.json",
+      "transcript": "/f2/a72da9647f/0/full.jsonl",
+      "content_hash": "/f2/a72da9647f/0/content_hash.txt",
+      "prompt": "/f2/a72da9647f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 11,
+    "cache_creation_tokens": 178164,
+    "cache_read_tokens": 1138865,
+    "output_tokens": 805,
+    "api_call_count": 7
+  }
+}
