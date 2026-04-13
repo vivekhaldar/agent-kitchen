@@ -1673,6 +1673,29 @@ body.terminal-open .content {
   font-style: italic;
 }
 
+/* Local slash commands (e.g. /model, /exit) rendered as compact pills */
+.chat-local-command {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  margin: 2px 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+}
+.chat-local-cmd-icon {
+  font-size: 8px;
+  opacity: 0.5;
+}
+.chat-local-cmd-name {
+  opacity: 0.7;
+}
+.chat-local-cmd-output {
+  opacity: 0.5;
+  font-style: italic;
+}
+
 .chat-terminated {
   color: #e06c75;
   border: 1px solid #e06c7533;

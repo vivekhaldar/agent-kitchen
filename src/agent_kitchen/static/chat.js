@@ -32,6 +32,10 @@
   var $imagePreview = document.getElementById("chat-image-preview");
   var $chatEmpty = document.getElementById("chat-empty");
 
+  if ($chatMessages) {
+    $chatMessages.addEventListener("scroll", trackScrollPosition);
+  }
+
   // --- Helpers ---
 
   function escapeHtml(s) {
@@ -48,9 +52,21 @@
     return "chat-" + (chatTabIdCounter++);
   }
 
+  // Only auto-scroll if user is already near the bottom (within 80px).
+  // This lets users scroll up to read older messages while output streams.
+  var userNearBottom = true;
+
   function scrollToBottom() {
     if (!$chatMessages) return;
+    if (!userNearBottom) return;
     $chatMessages.scrollTop = $chatMessages.scrollHeight;
+  }
+
+  function trackScrollPosition() {
+    if (!$chatMessages) return;
+    var threshold = 80;
+    var distFromBottom = $chatMessages.scrollHeight - $chatMessages.scrollTop - $chatMessages.clientHeight;
+    userNearBottom = distFromBottom <= threshold;
   }
 
   // --- Tool call icons by kind ---
@@ -311,7 +327,14 @@
 
       case "user_message_chunk":
         var userText = (msg.content && msg.content.text) || "";
-        if (userText) appendUserBubble(tabData, userText);
+        if (userText) {
+          var localCmd = parseLocalCommand(userText);
+          if (localCmd) {
+            appendLocalCommand(tabData, localCmd);
+          } else {
+            appendUserBubble(tabData, userText);
+          }
+        }
         break;
 
       case "tool_call":
@@ -333,6 +356,43 @@
       default:
         break;
     }
+  }
+
+  // --- Local Command Detection ---
+
+  // Matches <command-name>/foo</command-name> with optional args/message tags
+  var LOCAL_CMD_RE = /<command-name>\s*(.+?)\s*<\/command-name>/;
+  // Matches <local-command-stdout>...</local-command-stdout>
+  var LOCAL_STDOUT_RE = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/;
+  // Matches <local-command-caveat>...</local-command-caveat> (system boilerplate)
+  var LOCAL_CAVEAT_RE = /^\s*<local-command-caveat>/;
+
+  function parseLocalCommand(text) {
+    if (LOCAL_CAVEAT_RE.test(text)) return { type: "caveat" };
+    var cmdMatch = LOCAL_CMD_RE.exec(text);
+    if (cmdMatch) return { type: "command", name: cmdMatch[1].trim() };
+    var stdoutMatch = LOCAL_STDOUT_RE.exec(text);
+    if (stdoutMatch) return { type: "stdout", text: stdoutMatch[1].trim() };
+    return null;
+  }
+
+  function appendLocalCommand(tabData, parsed) {
+    if (parsed.type === "caveat") return; // hide system boilerplate
+
+    var el = document.createElement("div");
+    el.className = "chat-local-command";
+
+    if (parsed.type === "command") {
+      el.innerHTML =
+        '<span class="chat-local-cmd-icon">&#9654;</span>' +
+        '<span class="chat-local-cmd-name">' + escapeHtml(parsed.name) + "</span>";
+    } else if (parsed.type === "stdout") {
+      var output = parsed.text || "(no output)";
+      el.innerHTML =
+        '<span class="chat-local-cmd-output">' + escapeHtml(output) + "</span>";
+    }
+    tabData.container.appendChild(el);
+    scrollToBottom();
   }
 
   // --- Rendering: User Messages ---
@@ -734,6 +794,7 @@
     $chatInput.value = "";
     $chatInput.style.height = "auto";
 
+    userNearBottom = true;
     appendUserBubble(tab, text, images);
     tab.pendingImages = [];
     renderImagePreview();
@@ -985,6 +1046,8 @@
   window._chatInternals = {
     handleServerMessage: handleServerMessage,
     handleUpdate: handleUpdate,
+    parseLocalCommand: parseLocalCommand,
+    appendLocalCommand: appendLocalCommand,
     appendAgentText: appendAgentText,
     appendUserBubble: appendUserBubble,
     finalizeAssistantMessage: finalizeAssistantMessage,
