@@ -1,0 +1,1 @@
+minor annoyance --- in the agent window when output is streaming i can't scroll up to older parts of the conversation because it keeps scrolling to the bottom of the window as output is streaming in. i do want to see output streaming in, but don't force-scroll to the bottom
