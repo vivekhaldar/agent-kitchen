@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "427dd6482daf",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/agent_kitchen/acp_bridge.py",
+    "tests/test_acp_lifecycle.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/42/7dd6482daf/0/metadata.json",
+      "transcript": "/42/7dd6482daf/0/full.jsonl",
+      "content_hash": "/42/7dd6482daf/0/content_hash.txt",
+      "prompt": "/42/7dd6482daf/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 73,
+    "cache_creation_tokens": 79584,
+    "cache_read_tokens": 3030496,
+    "output_tokens": 20411,
+    "api_call_count": 48
+  }
+}

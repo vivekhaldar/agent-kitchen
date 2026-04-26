@@ -1,0 +1,23 @@
+when i run agent-kitchen and start a claude instance in it, it tell me it is using opus 4.6 not the latest 4.7 -- i want it to run the latest 4.7.... what's going on?
+
+---
+
+<task-notification>
+<task-id>b7p2prqbh</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-haldar-repos-gh-agent-kitchen/929c1f63-8a1b-4b2c-b46a-1c0daa5931f7/tasks/b7p2prqbh.output</output-file>
+<status>completed</status>
+<summary>Background command "Locate claude-agent-sdk package files" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+yes make that change. commit and push. also push new pypi version.
+
+---
+
+hmmm.... so if someone does "pip install agent-kitchen".... how do they also get "npm install -g @agentclientprotocol/claude-agent-acp@latest"??
+
+---
+
+do all three. but make individual commits for each
