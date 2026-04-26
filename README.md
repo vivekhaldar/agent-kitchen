@@ -150,6 +150,7 @@ uvx ruff format .                # Format
 - Python 3.12+
 - macOS (terminal launch uses AppleScript; the dashboard itself works anywhere)
 - `~/.claude` and/or `~/.codex` directories with session data
+- Node.js (for the chat panel — agents are spawned via `npx` and fetched on first use; no separate global install needed)
 
 ## License
 
