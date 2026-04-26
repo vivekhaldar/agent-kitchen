@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import acp
 import pytest
 
-from agent_kitchen.acp_bridge import AGENT_COMMANDS, ACPBridge
+from agent_kitchen.acp_bridge import (
+    AGENT_COMMANDS,
+    MIN_CLAUDE_AGENT_ACP_VERSION,
+    ACPBridge,
+    check_min_agent_version,
+)
 
 
 class TestAgentCommands:
@@ -17,6 +22,51 @@ class TestAgentCommands:
         cmd = AGENT_COMMANDS["claude"]
         assert cmd[0] == "npx"
         assert "@agentclientprotocol/claude-agent-acp" in cmd
+
+
+class TestMinVersionCheck:
+    """A stale npx cache can serve a claude-agent-acp too old to know Opus 4.7.
+    The version check catches that and tells the user how to refresh."""
+
+    def test_passes_when_version_meets_minimum(self):
+        info = MagicMock(name="@agentclientprotocol/claude-agent-acp")
+        info.name = "@agentclientprotocol/claude-agent-acp"
+        info.version = MIN_CLAUDE_AGENT_ACP_VERSION
+        check_min_agent_version(info)  # no raise
+
+    def test_passes_when_version_above_minimum(self):
+        info = MagicMock()
+        info.name = "@agentclientprotocol/claude-agent-acp"
+        info.version = "99.0.0"
+        check_min_agent_version(info)
+
+    def test_raises_when_version_below_minimum(self):
+        info = MagicMock()
+        info.name = "@agentclientprotocol/claude-agent-acp"
+        info.version = "0.26.0"
+        with pytest.raises(RuntimeError, match="claude-agent-acp 0.26.0 is too old"):
+            check_min_agent_version(info)
+
+    def test_error_message_includes_refresh_instruction(self):
+        info = MagicMock()
+        info.name = "@agentclientprotocol/claude-agent-acp"
+        info.version = "0.26.0"
+        with pytest.raises(RuntimeError, match="npx.*@latest"):
+            check_min_agent_version(info)
+
+    def test_skips_other_agents(self):
+        """Only claude-agent-acp is version-checked. Other ACP agents pass through."""
+        info = MagicMock()
+        info.name = "@zed-industries/codex-acp"
+        info.version = "0.0.1"
+        check_min_agent_version(info)  # no raise
+
+    def test_handles_missing_version_field(self):
+        """A malformed agentInfo without version should not crash; treat as too old."""
+        info = MagicMock(spec=[])
+        info.name = "@agentclientprotocol/claude-agent-acp"
+        with pytest.raises(RuntimeError, match="too old"):
+            check_min_agent_version(info)
 
 
 class TestStartPreflight:

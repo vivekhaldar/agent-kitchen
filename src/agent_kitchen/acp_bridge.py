@@ -24,6 +24,42 @@ AGENT_COMMANDS: dict[str, list[str]] = {
     "gemini": ["npx", "@google/gemini-cli", "--experimental-acp"],
 }
 
+# 0.31.0 is the first claude-agent-acp release that bundles a Claude Code
+# binary aware of Opus 4.7. Older cached versions resolve "opus" to 4.6.
+MIN_CLAUDE_AGENT_ACP_VERSION = "0.31.0"
+
+
+def _version_tuple(v: str) -> tuple[int, ...]:
+    """Convert "0.31.0" → (0, 31, 0). Non-numeric segments become 0."""
+    parts = []
+    for segment in v.split("."):
+        try:
+            parts.append(int(segment.split("-", 1)[0]))
+        except ValueError:
+            parts.append(0)
+    return tuple(parts)
+
+
+def check_min_agent_version(agent_info) -> None:
+    """Raise RuntimeError if claude-agent-acp is older than the minimum required.
+
+    Other agents are not version-checked. The error message tells the user how
+    to refresh the npx cache, since the most common cause is a stale cache
+    serving an old version even though the installed agent-kitchen is current.
+    """
+    name = getattr(agent_info, "name", "") or ""
+    if name != "@agentclientprotocol/claude-agent-acp":
+        return
+    version = getattr(agent_info, "version", None)
+    if version is None or _version_tuple(version) < _version_tuple(MIN_CLAUDE_AGENT_ACP_VERSION):
+        reported = version or "unknown"
+        raise RuntimeError(
+            f"claude-agent-acp {reported} is too old "
+            f"(need >= {MIN_CLAUDE_AGENT_ACP_VERSION} for Claude Opus 4.7 support). "
+            "Refresh the npx cache with: "
+            "npx -y @agentclientprotocol/claude-agent-acp@latest"
+        )
+
 
 class AuthRequiredError(Exception):
     """Raised when an agent requires authentication before proceeding."""
@@ -184,6 +220,11 @@ class ACPBridge:
             getattr(self._agent_info, "name", "unknown"),
             self.can_load_session,
         )
+        try:
+            check_min_agent_version(self._agent_info)
+        except RuntimeError:
+            await self.close()
+            raise
 
         history_loaded = False
         if session_id and self.can_load_session:
