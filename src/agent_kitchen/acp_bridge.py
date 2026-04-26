@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Map agent names to their ACP spawn commands
 AGENT_COMMANDS: dict[str, list[str]] = {
-    "claude": ["claude-agent-acp"],
+    "claude": ["npx", "-y", "@agentclientprotocol/claude-agent-acp"],
     "codex": ["npx", "@zed-industries/codex-acp"],
     "copilot": ["npx", "@github/copilot-language-server", "--acp"],
     "gemini": ["npx", "@google/gemini-cli", "--experimental-acp"],

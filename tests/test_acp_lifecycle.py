@@ -6,7 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import acp
 import pytest
 
-from agent_kitchen.acp_bridge import ACPBridge
+from agent_kitchen.acp_bridge import AGENT_COMMANDS, ACPBridge
+
+
+class TestAgentCommands:
+    """Spawn commands should not require a separate global install."""
+
+    def test_claude_uses_npx(self):
+        """Claude is spawned via npx so `pip install agent-kitchen` is sufficient."""
+        cmd = AGENT_COMMANDS["claude"]
+        assert cmd[0] == "npx"
+        assert "@agentclientprotocol/claude-agent-acp" in cmd
 
 
 class TestStartPreflight:
