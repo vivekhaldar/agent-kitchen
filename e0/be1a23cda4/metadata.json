@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "e0be1a23cda4",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "pyproject.toml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e0/be1a23cda4/0/metadata.json",
+      "transcript": "/e0/be1a23cda4/0/full.jsonl",
+      "content_hash": "/e0/be1a23cda4/0/content_hash.txt",
+      "prompt": "/e0/be1a23cda4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 281,
+    "cache_creation_tokens": 273143,
+    "cache_read_tokens": 6286161,
+    "output_tokens": 18623,
+    "api_call_count": 69
+  }
+}

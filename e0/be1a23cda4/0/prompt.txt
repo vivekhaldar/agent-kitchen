@@ -1,0 +1,13 @@
+bring this up locally for me to see
+
+---
+
+do all the tests pass? commit and push this
+
+---
+
+ok this looks good to me. merge into main and push
+
+---
+
+also push a new version on pypi
