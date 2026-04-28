@@ -1,0 +1,3 @@
+i used claude design to spruce up the ui here. it gave me this patch set -- /Users/haldar/Downloads/agent-kitchen.zip. screenshot of new design is attached. [Image #1]
+
+look at the patch and screenshot, implement that design fully here. work in a new branch.

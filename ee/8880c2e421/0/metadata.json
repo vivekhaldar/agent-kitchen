@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "ee8880c2e421",
+  "session_id": "8d97a93b-e644-441d-a09d-46dcf2bb789f",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-28T17:11:31.351001Z",
+  "branch": "feat/brutalist-ui",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/agent_kitchen/static/app.js"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "c2ec1b958999",
+  "token_usage": {
+    "input_tokens": 74,
+    "cache_creation_tokens": 170343,
+    "cache_read_tokens": 3609749,
+    "output_tokens": 12692,
+    "api_call_count": 44
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-28T17:11:31.246266Z",
+    "agent_lines": 4,
+    "human_added": 711,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 715,
+    "agent_percentage": 0.5594405594405595
+  }
+}
