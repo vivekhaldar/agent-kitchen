@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
@@ -29,17 +29,17 @@
 <body>
   <header class="header">
     <div class="header-left">
-      <img src="favicon.svg" alt="" class="header-logo" width="28" height="28">
-      <h1 class="header-title">AGENT KITCHEN</h1>
+      <span class="header-logo-glyph" aria-hidden="true">▣</span>
+      <h1 class="header-title">agent-kitchen</h1>
     </div>
     <div class="header-right">
-      <button class="theme-toggle" id="theme-toggle" title="Toggle theme (d)">Auto</button>
-      <span class="last-scan" id="last-scan">Last scan: --</span>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle theme (d)">[auto]</button>
+      <span class="last-scan" id="last-scan">last scan: --</span>
       <label class="scan-days-label">
         <input type="number" id="scan-days" class="scan-days-input" value="7" min="1" max="365">
         <span class="scan-days-suffix">days</span>
       </label>
-      <button class="btn-refresh" id="btn-refresh" title="Refresh" aria-label="Refresh sessions">Refresh</button>
+      <button class="btn-refresh" id="btn-refresh" title="Refresh" aria-label="Refresh sessions">refresh</button>
     </div>
   </header>
 
@@ -48,20 +48,20 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="time-segments" id="time-segments">
-          <button class="time-seg" data-days="1">24h</button>
-          <button class="time-seg" data-days="7">7d</button>
-          <button class="time-seg" data-days="30">30d</button>
-          <button class="time-seg active" data-days="0">All</button>
+          <button class="time-seg" data-days="1">[24h]</button>
+          <button class="time-seg" data-days="7">[7d]</button>
+          <button class="time-seg" data-days="30">[30d]</button>
+          <button class="time-seg active" data-days="0">[all]</button>
         </div>
         <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">&laquo;</button>
       </div>
 
       <div class="sidebar-search" id="search-hint-bar">
-        <kbd>/</kbd> to search
+        <kbd>/</kbd> grep
       </div>
 
       <div class="sidebar-content" id="content">
-        <div class="loading" id="loading">Loading sessions...</div>
+        <div class="loading" id="loading">loading sessions…</div>
 
         <!-- Repo groups rendered here by app.js -->
         <div id="repo-groups"></div>
@@ -74,10 +74,10 @@
 
         <!-- Empty state -->
         <div id="empty-state" class="empty-state hidden">
-          <div class="empty-state-title">No sessions found</div>
+          <div class="empty-state-title">── no sessions ──</div>
           <div class="empty-state-body">
-            <p>Agent Kitchen looks for sessions in <code>~/.claude</code> and <code>~/.codex</code> directories.</p>
-            <p>Start a Claude Code or Codex CLI session in any git repo, then refresh this page.</p>
+            <p>Agent Kitchen looks for sessions in <code>~/.claude</code> and <code>~/.codex</code>.</p>
+            <p>Start a Claude Code or Codex CLI session in any git repo, then refresh.</p>
           </div>
         </div>
       </div>
@@ -97,24 +97,25 @@
       <div class="chat-body">
         <div class="chat-turn-sidebar hidden" id="chat-turn-sidebar">
           <div class="turn-sidebar-header">
-            <span class="turn-sidebar-title">Turns</span>
+            <span class="turn-sidebar-title">── turns ──</span>
             <span class="turn-counter">-</span>
           </div>
           <div class="turn-list"></div>
-          <div class="turn-shortcuts">Ctrl+&uarr;/&darr; navigate &middot; Ctrl+T toggle</div>
+          <div class="turn-shortcuts">ctrl+&uarr;/&darr; nav · ctrl+t toggle</div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
       </div>
       <div class="chat-image-preview" id="chat-image-preview"></div>
       <div class="chat-input-bar">
-        <textarea id="chat-input" class="chat-input" placeholder="Send a message..." rows="1"></textarea>
-        <button id="chat-send" class="chat-send-btn" aria-label="Send message">&uarr;</button>
-        <button id="chat-stop" class="chat-stop-btn hidden" aria-label="Stop agent" title="Stop (Esc)">&square;</button>
+        <span class="chat-input-prompt" aria-hidden="true">$</span>
+        <textarea id="chat-input" class="chat-input" placeholder="type message…" rows="1"></textarea>
+        <button id="chat-send" class="chat-send-btn" aria-label="Send message">[send ⏎]</button>
+        <button id="chat-stop" class="chat-stop-btn hidden" aria-label="Stop agent" title="Stop (Esc)">[stop]</button>
       </div>
       <!-- Empty state when no chats open -->
       <div class="chat-empty" id="chat-empty">
-        <div class="chat-empty-title">No active chats</div>
-        <div class="chat-empty-body">Click a session in the sidebar to open a chat</div>
+        <div class="chat-empty-title">── no active chats ──</div>
+        <div class="chat-empty-body">click a session to open</div>
       </div>
     </div>
   </div>
@@ -122,9 +123,9 @@
   <div id="search-overlay" class="search-overlay hidden" role="search" aria-label="Search sessions">
     <div class="search-box" role="dialog" aria-label="Search">
       <div class="search-input-row">
-        <span class="search-icon" aria-hidden="true">/</span>
+        <span class="search-icon" aria-hidden="true">$</span>
         <input type="text" id="search-input" class="search-input"
-               placeholder="Search sessions..." autocomplete="off" spellcheck="false"
+               placeholder="grep sessions…" autocomplete="off" spellcheck="false"
                aria-label="Search sessions">
         <kbd class="search-hint">esc</kbd>
       </div>
@@ -134,19 +135,19 @@
 
   <div id="help-overlay" class="help-overlay hidden">
     <div class="help-box">
-      <div class="help-title">Keyboard Shortcuts</div>
+      <div class="help-title">── shortcuts ──</div>
       <div class="help-shortcuts">
-        <div class="help-row"><kbd>/</kbd><span>Search sessions</span></div>
-        <div class="help-row"><kbd>?</kbd><span>Show this help</span></div>
-        <div class="help-row"><kbd>r</kbd><span>Refresh sessions</span></div>
-        <div class="help-row"><kbd>d</kbd><span>Cycle theme (auto/dark/light)</span></div>
-        <div class="help-row"><kbd>j</kbd><span>Next group</span></div>
-        <div class="help-row"><kbd>k</kbd><span>Previous group</span></div>
-        <div class="help-row"><kbd>Enter</kbd><span>Expand / collapse group</span></div>
-        <div class="help-row"><kbd>Esc</kbd><span>Close overlay</span></div>
-        <div class="help-row"><kbd>b</kbd><span>Toggle sidebar</span></div>
+        <div class="help-row"><kbd>/</kbd><span>search sessions</span></div>
+        <div class="help-row"><kbd>?</kbd><span>this help</span></div>
+        <div class="help-row"><kbd>r</kbd><span>refresh sessions</span></div>
+        <div class="help-row"><kbd>d</kbd><span>cycle theme</span></div>
+        <div class="help-row"><kbd>j</kbd><span>next group</span></div>
+        <div class="help-row"><kbd>k</kbd><span>previous group</span></div>
+        <div class="help-row"><kbd>Enter</kbd><span>expand / collapse</span></div>
+        <div class="help-row"><kbd>Esc</kbd><span>close overlay</span></div>
+        <div class="help-row"><kbd>b</kbd><span>toggle sidebar</span></div>
       </div>
-      <div class="help-dismiss">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
+      <div class="help-dismiss"><kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
     </div>
   </div>
 

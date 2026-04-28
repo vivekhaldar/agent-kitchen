@@ -9,7 +9,7 @@
   // JS manages the .dark class on <html> based on effective theme.
 
   var THEME_CYCLE = ["auto", "dark", "light"];
-  var THEME_LABELS = { auto: "Auto", dark: "Dark", light: "Light" };
+  var THEME_LABELS = { auto: "[auto]", dark: "[dark]", light: "[light]" };
   var $themeToggle = document.getElementById("theme-toggle");
   var darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -485,7 +485,7 @@
   function refreshSessions() {
     var days = parseInt($scanDays.value, 10) || 7;
     $btnRefresh.classList.add("spinning");
-    $btnRefresh.textContent = "Refreshing...";
+    $btnRefresh.textContent = "refreshing…";
     return fetch("/api/refresh?scan_days=" + days)
       .then(function (res) { return res.json(); })
       .then(function (data) {
@@ -499,7 +499,7 @@
       })
       .finally(function () {
         $btnRefresh.classList.remove("spinning");
-        $btnRefresh.textContent = "Refresh";
+        $btnRefresh.textContent = "refresh";
       });
   }
 
@@ -796,7 +796,7 @@
 
   function updateLastScan() {
     if (lastScannedTime) {
-      $lastScan.textContent = "Last scan: " + timeAgo(lastScannedTime);
+      $lastScan.textContent = "last scan: " + timeAgo(lastScannedTime);
     }
   }
 
