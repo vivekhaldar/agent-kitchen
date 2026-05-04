@@ -53,6 +53,11 @@
   --font-size-lg:   15px;
   --font-size-xl:   18px;
   --font-size-2xl:  22px;
+
+  /* Zen mode contrast tokens */
+  --zen-scrim:        rgba(0, 0, 0, 0.06);
+  --zen-card-bg:      var(--bg-primary);
+  --zen-card-shadow:  rgba(0, 0, 0, 0.12);
 }
 
 /* ============================================================
@@ -1530,15 +1535,16 @@ body.zen-mode .header,
 body.zen-mode .sidebar,
 body.zen-mode .sidebar-resize-handle,
 body.zen-mode .chat-panel-header {
-  opacity: 0.18;
+  opacity: 0.10;
   pointer-events: none;
-  filter: saturate(0.4);
+  filter: saturate(0.3);
   transition: opacity 120ms linear, filter 120ms linear;
 }
 
 /* Lift the chat panel out of the layout flex so the reading column can
    center on the full viewport (not just the right pane behind the
-   dimmed sidebar). The dimmed sidebar stays in flow, visible behind. */
+   dimmed sidebar). The chat-panel itself becomes a soft scrim — slightly
+   darker than body bg — so the reading column pops as the foreground. */
 body.zen-mode .chat-panel {
   position: fixed;
   top: 41px;
@@ -1546,7 +1552,7 @@ body.zen-mode .chat-panel {
   right: 220px; /* leave space for the turns rail */
   bottom: 0;
   z-index: 30;
-  background: transparent;
+  background: var(--zen-scrim);
 }
 
 body.zen-mode .chat-messages {
@@ -1561,7 +1567,8 @@ body.zen-mode .chat-tab-container.active {
   margin: 0 auto;
   padding: 24px 32px;
   border: 1px solid var(--border);
-  background: var(--bg-primary);
+  background: var(--zen-card-bg);
+  box-shadow: 0 12px 32px var(--zen-card-shadow);
 }
 
 body.zen-mode .chat-tab-container.active::before {
@@ -1580,7 +1587,8 @@ body.zen-mode .chat-input-bar {
   max-width: 1000px;
   margin: 8px auto 16px;
   border: 1px solid var(--border);
-  background: var(--bg-primary);
+  background: var(--zen-card-bg);
+  box-shadow: 0 8px 20px var(--zen-card-shadow);
 }
 
 body.zen-mode .chat-image-preview {
@@ -1656,6 +1664,11 @@ html.dark {
 
   --badge-claude: #dddddd;
   --badge-codex:  #999999;
+
+  /* Zen mode: darker scrim, lifted card so it pops against near-black bg */
+  --zen-scrim:       rgba(0, 0, 0, 0.55);
+  --zen-card-bg:     var(--bg-surface);
+  --zen-card-shadow: rgba(0, 0, 0, 0.55);
 }
 
 html.dark .header           { box-shadow: none; border-bottom-color: var(--border); }
