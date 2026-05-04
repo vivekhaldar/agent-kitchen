@@ -1536,12 +1536,28 @@ body.zen-mode .chat-panel-header {
   transition: opacity 120ms linear, filter 120ms linear;
 }
 
-/* Push the chat panel down a bit so the breadcrumb has breathing room */
-body.zen-mode .chat-messages { padding-top: 32px; }
+/* Lift the chat panel out of the layout flex so the reading column can
+   center on the full viewport (not just the right pane behind the
+   dimmed sidebar). The dimmed sidebar stays in flow, visible behind. */
+body.zen-mode .chat-panel {
+  position: fixed;
+  top: 41px;
+  left: 0;
+  right: 220px; /* leave space for the turns rail */
+  bottom: 0;
+  z-index: 30;
+  background: transparent;
+}
+
+body.zen-mode .chat-messages {
+  background: transparent;
+  padding-top: 32px;
+}
 
 /* Centered reading column for the active session */
 body.zen-mode .chat-tab-container.active {
-  max-width: 760px;
+  width: calc(100% - 64px);
+  max-width: 1000px;
   margin: 0 auto;
   padding: 24px 32px;
   border: 1px solid var(--border);
@@ -1549,81 +1565,43 @@ body.zen-mode .chat-tab-container.active {
 }
 
 body.zen-mode .chat-tab-container.active::before {
-  content: "\2014 session \2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014";
+  content: "\2014 session \2014\2014";
   display: block;
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   color: var(--text-muted);
   letter-spacing: 0.04em;
   margin-bottom: 12px;
-  white-space: nowrap;
-  overflow: hidden;
 }
 
 /* Centered input bar matching the reading column width */
 body.zen-mode .chat-input-bar {
-  max-width: 760px;
+  width: calc(100% - 64px);
+  max-width: 1000px;
   margin: 8px auto 16px;
   border: 1px solid var(--border);
   background: var(--bg-primary);
 }
 
 body.zen-mode .chat-image-preview {
-  max-width: 760px;
+  width: calc(100% - 64px);
+  max-width: 1000px;
   margin: 0 auto;
 }
 
-/* Float the turns sidebar to the right edge as a compact rail */
+/* Pin the turns sidebar to the viewport's right edge as a full rail.
+   Keeps the default visual (label + preview text + shortcuts hint). */
 body.zen-mode .chat-turn-sidebar {
   position: fixed;
-  top: 60px;
-  right: 14px;
-  bottom: auto;
-  width: auto;
-  max-height: calc(100vh - 80px);
-  border: none;
-  background: transparent;
+  top: 41px;
+  right: 0;
+  bottom: 0;
+  width: 220px;
+  border-left: 1px solid var(--border);
+  border-right: none;
+  background: var(--bg-primary);
   z-index: 60;
-  flex-direction: column;
-  overflow: hidden;
 }
-
-body.zen-mode .chat-turn-sidebar .turn-sidebar-title {
-  text-transform: lowercase;
-  letter-spacing: 0.06em;
-}
-body.zen-mode .chat-turn-sidebar .turn-sidebar-header {
-  border-bottom: none;
-  padding: 4px 8px;
-  justify-content: flex-end;
-}
-body.zen-mode .chat-turn-sidebar .turn-counter { display: none; }
-
-body.zen-mode .chat-turn-sidebar .turn-list {
-  padding: 0 8px;
-  overflow-y: auto;
-}
-body.zen-mode .chat-turn-sidebar .turn-item {
-  border: none;
-  padding: 2px 6px;
-  background: transparent;
-  border-left: none;
-  justify-content: flex-end;
-}
-body.zen-mode .chat-turn-sidebar .turn-item .turn-preview { display: none; }
-body.zen-mode .chat-turn-sidebar .turn-item .turn-label {
-  min-width: 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-}
-body.zen-mode .chat-turn-sidebar .turn-item.active .turn-label { color: var(--accent); }
-body.zen-mode .chat-turn-sidebar .turn-shortcuts { display: none; }
-body.zen-mode .chat-turn-sidebar .turn-item:hover { background: transparent; }
-body.zen-mode .chat-turn-sidebar .turn-item:hover .turn-label { color: var(--text-primary); }
-
-/* Pad turn label index with leading zero for visual alignment */
-body.zen-mode .chat-turn-sidebar .turn-item .turn-label::before { content: "["; }
-body.zen-mode .chat-turn-sidebar .turn-item .turn-label::after { content: "]"; }
 
 /* ============================================================
    RESPONSIVE
