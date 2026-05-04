@@ -636,7 +636,7 @@ body {
 
 .session-row {
   display: grid;
-  grid-template-columns: 12px 1fr auto auto;
+  grid-template-columns: 12px 1fr auto auto auto;
   align-items: center;
   gap: 8px;
   padding: 5px 14px;
@@ -692,6 +692,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-primary);
+  min-width: 0;
 }
 .session-fresh .session-summary {
   font-weight: 500;
