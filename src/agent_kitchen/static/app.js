@@ -1008,7 +1008,12 @@
       return;
     }
 
-    // Escape closes active terminal tab (returns focus to dashboard)
+    // Escape: prefer exiting zen mode, then closing terminal.
+    if (e.key === "Escape" && isZenMode) {
+      e.preventDefault();
+      exitZenMode();
+      return;
+    }
     if (e.key === "Escape" && activeTabId) {
       e.preventDefault();
       closeTab(activeTabId);
@@ -1047,8 +1052,103 @@
     } else if (e.key === "b") {
       e.preventDefault();
       toggleSidebar();
+    } else if (e.key === "z") {
+      e.preventDefault();
+      toggleZenMode();
     }
   });
+
+  // --- Zen Mode ---
+  // Focus on a single session: chrome dimmed, chat panel becomes a centered
+  // reading column with a top-bar breadcrumb. Toggle with `z`, exit with Esc.
+
+  var $zenBreadcrumb = document.getElementById("zen-breadcrumb");
+  var $zenExitBtn = document.getElementById("zen-exit-btn");
+  var $zenBcGlyph = document.getElementById("zen-bc-glyph");
+  var $zenBcTitle = document.getElementById("zen-bc-title");
+  var $zenBcAgent = document.getElementById("zen-bc-agent");
+  var $zenBcBranch = document.getElementById("zen-bc-branch");
+  var $zenBcTurns = document.getElementById("zen-bc-turns");
+  var isZenMode = false;
+
+  function findBranchForCwd(cwd) {
+    if (!dashboardData || !cwd) return "";
+    var groups = dashboardData.repo_groups || [];
+    var bestBranch = "";
+    var bestLen = 0;
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i];
+      if (!g.repo_root) continue;
+      if (cwd === g.repo_root || cwd.indexOf(g.repo_root + "/") === 0) {
+        if (g.repo_root.length > bestLen) {
+          bestLen = g.repo_root.length;
+          bestBranch = g.git_branch || "";
+        }
+      }
+    }
+    return bestBranch;
+  }
+
+  function updateZenBreadcrumb() {
+    if (!isZenMode) return;
+    var info = window.AgentChat && window.AgentChat.getActiveTabInfo();
+    if (!info) return;
+    if ($zenBcTitle) $zenBcTitle.textContent = info.title || "session";
+    if ($zenBcAgent) $zenBcAgent.textContent = info.agent || "--";
+    if ($zenBcBranch) {
+      var branch = findBranchForCwd(info.cwd);
+      $zenBcBranch.textContent = branch || "(no repo)";
+    }
+    if ($zenBcTurns) {
+      $zenBcTurns.textContent = info.turnCount + " turn" + (info.turnCount === 1 ? "" : "s");
+    }
+    if ($zenBcGlyph) {
+      $zenBcGlyph.classList.toggle("idle", !info.streaming);
+    }
+  }
+
+  function enterZenMode() {
+    var info = window.AgentChat && window.AgentChat.getActiveTabInfo();
+    if (!info) return; // nothing to focus on
+    isZenMode = true;
+    document.body.classList.add("zen-mode");
+    updateZenBreadcrumb();
+  }
+
+  function exitZenMode() {
+    if (!isZenMode) return;
+    isZenMode = false;
+    document.body.classList.remove("zen-mode");
+  }
+
+  function toggleZenMode() {
+    if (isZenMode) exitZenMode();
+    else enterZenMode();
+  }
+
+  if ($zenExitBtn) {
+    $zenExitBtn.addEventListener("click", exitZenMode);
+  }
+
+  // Keep breadcrumb fresh when active tab changes or session updates.
+  window.addEventListener("agent-active-tab-changed", updateZenBreadcrumb);
+  window.addEventListener("agent-session-updated", updateZenBreadcrumb);
+  window.addEventListener("agent-session-started", updateZenBreadcrumb);
+  window.addEventListener("agent-session-closed", function () {
+    // If the focused tab is gone, drop out of zen mode.
+    if (!isZenMode) return;
+    var info = window.AgentChat && window.AgentChat.getActiveTabInfo();
+    if (!info) exitZenMode();
+    else updateZenBreadcrumb();
+  });
+
+  // Public API for chat.js (Esc handler in input falls through to here).
+  window.AgentZen = {
+    enter: enterZenMode,
+    exit: exitZenMode,
+    toggle: toggleZenMode,
+    isActive: function () { return isZenMode; },
+  };
 
   // --- Sidebar Toggle & Resize ---
 

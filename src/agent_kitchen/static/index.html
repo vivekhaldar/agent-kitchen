@@ -43,6 +43,21 @@
     </div>
   </header>
 
+  <!-- Zen mode chrome (visible only when body.zen-mode) -->
+  <div id="zen-breadcrumb" class="zen-breadcrumb" aria-hidden="true">
+    <span id="zen-bc-glyph" class="zen-bc-glyph"></span>
+    <span id="zen-bc-title" class="zen-bc-item zen-bc-title">--</span>
+    <span class="zen-bc-sep">|</span>
+    <span id="zen-bc-agent" class="zen-bc-item zen-bc-agent">--</span>
+    <span class="zen-bc-sep">|</span>
+    <span id="zen-bc-branch" class="zen-bc-item zen-bc-branch">--</span>
+    <span class="zen-bc-sep">|</span>
+    <span id="zen-bc-turns" class="zen-bc-item zen-bc-turns">--</span>
+    <span class="zen-bc-sep">|</span>
+    <span class="zen-bc-item zen-bc-hint">esc &middot; exit zen</span>
+  </div>
+  <button id="zen-exit-btn" class="zen-exit-btn" type="button">[esc] exit zen</button>
+
   <div class="app-layout" id="app-layout">
     <!-- Left sidebar: session list -->
     <aside class="sidebar" id="sidebar">
@@ -146,6 +161,7 @@
         <div class="help-row"><kbd>Enter</kbd><span>expand / collapse</span></div>
         <div class="help-row"><kbd>Esc</kbd><span>close overlay</span></div>
         <div class="help-row"><kbd>b</kbd><span>toggle sidebar</span></div>
+        <div class="help-row"><kbd>z</kbd><span>toggle zen mode</span></div>
       </div>
       <div class="help-dismiss"><kbd>?</kbd> or <kbd>Esc</kbd> to close</div>
     </div>

@@ -1468,6 +1468,164 @@ body.terminal-open .content { padding-bottom: calc(50vh + 24px); }
 .chat-stop-btn.hidden { display: none; }
 
 /* ============================================================
+   ZEN MODE — focus on a single session
+   ============================================================ */
+
+/* Zen-only chrome: hidden by default, shown when body.zen-mode */
+.zen-breadcrumb,
+.zen-exit-btn { display: none; }
+
+body.zen-mode .zen-breadcrumb {
+  position: fixed;
+  top: 14px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  z-index: 70;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  padding: 0 200px; /* leave room for exit button on right */
+}
+
+.zen-bc-glyph { color: var(--accent); font-size: 12px; line-height: 1; }
+.zen-bc-glyph::before { content: "\25D0"; }
+.zen-bc-glyph.idle::before { content: "\25CF"; color: var(--text-muted); }
+
+.zen-bc-sep { color: var(--border); }
+.zen-bc-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+.zen-bc-hint { color: var(--text-muted); }
+
+body.zen-mode .zen-exit-btn {
+  display: block;
+  position: fixed;
+  top: 10px;
+  right: 18px;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  padding: 5px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  z-index: 70;
+  transition: opacity var(--transition);
+}
+body.zen-mode .zen-exit-btn:hover { opacity: 0.85; }
+
+/* Dim the surrounding chrome */
+body.zen-mode .header,
+body.zen-mode .sidebar,
+body.zen-mode .sidebar-resize-handle,
+body.zen-mode .chat-panel-header {
+  opacity: 0.18;
+  pointer-events: none;
+  filter: saturate(0.4);
+  transition: opacity 120ms linear, filter 120ms linear;
+}
+
+/* Push the chat panel down a bit so the breadcrumb has breathing room */
+body.zen-mode .chat-messages { padding-top: 32px; }
+
+/* Centered reading column for the active session */
+body.zen-mode .chat-tab-container.active {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 32px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+body.zen-mode .chat-tab-container.active::before {
+  content: "\2014 session \2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014\2014";
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Centered input bar matching the reading column width */
+body.zen-mode .chat-input-bar {
+  max-width: 760px;
+  margin: 8px auto 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+body.zen-mode .chat-image-preview {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* Float the turns sidebar to the right edge as a compact rail */
+body.zen-mode .chat-turn-sidebar {
+  position: fixed;
+  top: 60px;
+  right: 14px;
+  bottom: auto;
+  width: auto;
+  max-height: calc(100vh - 80px);
+  border: none;
+  background: transparent;
+  z-index: 60;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body.zen-mode .chat-turn-sidebar .turn-sidebar-title {
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+}
+body.zen-mode .chat-turn-sidebar .turn-sidebar-header {
+  border-bottom: none;
+  padding: 4px 8px;
+  justify-content: flex-end;
+}
+body.zen-mode .chat-turn-sidebar .turn-counter { display: none; }
+
+body.zen-mode .chat-turn-sidebar .turn-list {
+  padding: 0 8px;
+  overflow-y: auto;
+}
+body.zen-mode .chat-turn-sidebar .turn-item {
+  border: none;
+  padding: 2px 6px;
+  background: transparent;
+  border-left: none;
+  justify-content: flex-end;
+}
+body.zen-mode .chat-turn-sidebar .turn-item .turn-preview { display: none; }
+body.zen-mode .chat-turn-sidebar .turn-item .turn-label {
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+body.zen-mode .chat-turn-sidebar .turn-item.active .turn-label { color: var(--accent); }
+body.zen-mode .chat-turn-sidebar .turn-shortcuts { display: none; }
+body.zen-mode .chat-turn-sidebar .turn-item:hover { background: transparent; }
+body.zen-mode .chat-turn-sidebar .turn-item:hover .turn-label { color: var(--text-primary); }
+
+/* Pad turn label index with leading zero for visual alignment */
+body.zen-mode .chat-turn-sidebar .turn-item .turn-label::before { content: "["; }
+body.zen-mode .chat-turn-sidebar .turn-item .turn-label::after { content: "]"; }
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 

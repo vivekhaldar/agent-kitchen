@@ -132,6 +132,7 @@
     renderImagePreview();
     scrollToBottom();
     $chatInput.focus();
+    emitSessionEvent("agent-active-tab-changed", { tabId: tabId });
   }
 
   function closeChatTab(tabId) {
@@ -890,6 +891,9 @@
       if (tab && tab.streaming) {
         e.preventDefault();
         cancelAgent();
+      } else if (window.AgentZen && window.AgentZen.isActive()) {
+        e.preventDefault();
+        window.AgentZen.exit();
       }
     }
   });
@@ -1020,6 +1024,21 @@
         }
       });
       return sessions;
+    },
+
+    getActiveTabInfo: function () {
+      if (!activeChatTabId || !chatTabs[activeChatTabId]) return null;
+      var tab = chatTabs[activeChatTabId];
+      return {
+        tabId: tab.id,
+        title: tab.title,
+        agent: tab.agent,
+        cwd: tab.cwd,
+        sessionId: tab.sessionId,
+        turnCount: tab.userTurns.length,
+        streaming: tab.streaming,
+        terminated: !!tab.terminated,
+      };
     },
 
     openChat: function (session) {
