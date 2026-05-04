@@ -36,6 +36,7 @@ Agent Kitchen fixes this by scanning your local session data, grouping everythin
 - **Repo timelines** — see how work evolved across sessions over days
 - **Browser terminal** — resume sessions in-browser via xterm.js (fallback mode)
 - **Fuzzy search** — press `/` to filter across all sessions with command-palette overlay
+- **Zen mode** — press `z` to focus on a single session: chrome dimmed, centered reading column, top-bar breadcrumb, esc to exit
 - **Keyboard navigation** — `j`/`k` to move between groups, `Enter` to expand, `?` for shortcuts
 - **Image support** — paste images into chat with preview strip
 - **Session lifecycle** — automatic death detection, termination UI, and restart capability

@@ -57,8 +57,8 @@ JSONL files (~/.claude, ~/.codex)
 
 Vanilla HTML/JS/CSS, no build step.
 
-- **app.js** — Dashboard client. Fetches `/api/sessions`, renders repo groups as elevated cards with collapsible headers, status pills, metadata with dot separators, fuzzy search (`/` key), time segment filter, and keyboard navigation (`j`/`k`/`Enter`).
-- **chat.js** — Rich chat panel. Opens ACP agent conversations via WebSocket, renders markdown with syntax highlighting (marked + highlight.js), collapsible tool call cards with status-colored borders, turn-by-turn sidebar navigation (Ctrl+↑/↓), image paste support, token usage display, and session lifecycle management (death detection, restart).
+- **app.js** — Dashboard client. Fetches `/api/sessions`, renders repo groups as elevated cards with collapsible headers, status pills, metadata with dot separators, fuzzy search (`/` key), time segment filter, keyboard navigation (`j`/`k`/`Enter`), and zen mode toggle (`z` key). Exposes `window.AgentZen.{enter,exit,toggle,isActive}`.
+- **chat.js** — Rich chat panel. Opens ACP agent conversations via WebSocket, renders markdown with syntax highlighting (marked + highlight.js), collapsible tool call cards with status-colored borders, turn-by-turn sidebar navigation (Ctrl+↑/↓), image paste support, token usage display, and session lifecycle management (death detection, restart). Exposes `getActiveTabInfo()` and emits `agent-active-tab-changed` for the zen-mode breadcrumb.
 - **style.css** — Monochrome theme with orange accent. Card-based layout, rounded status pills, command-palette search overlay with backdrop blur. Dark mode via `html.dark` class (JS-managed, not media query). Sticky header with favicon. Theme toggle (`d` key) cycles auto/dark/light.
 - **index.html** — Shell with panels for dashboard, terminal (xterm.js), and chat.
 - **favicon.svg** — Layered flame icon.
@@ -71,6 +71,7 @@ Vanilla HTML/JS/CSS, no build step.
 - **Concurrency control**: LLM calls use `asyncio.Semaphore(3)` to avoid API rate limits.
 - **CLAUDECODE env var**: The summarizer unsets `CLAUDECODE` before Agent SDK calls to allow running inside a Claude Code session without nested-session errors.
 - **JS-managed dark mode**: Dark mode is controlled by a `.dark` class on `<html>`, toggled by JS based on localStorage preference or OS media query. The `d` key cycles auto → dark → light. This avoids CSS duplication from having both `@media` and `[data-theme]` selectors.
+- **Zen mode is CSS-driven**: Toggling `body.zen-mode` lifts `.chat-panel` to `position: fixed` (left:0, right:220px) so the reading column centers on the viewport even with the sidebar still in flow. Three custom-property tokens (`--zen-scrim`, `--zen-card-bg`, `--zen-card-shadow`) drive the foreground/background contrast and have separate values per theme.
 
 ## Gotchas
 
