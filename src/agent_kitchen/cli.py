@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -51,6 +52,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=False,
         help="Enable background LLM summarization (off by default)",
     )
+    web.add_argument(
+        "--projects-dir",
+        type=str,
+        default=None,
+        help="Override the Claude projects directory (default: ~/.claude/projects)",
+    )
 
     # --- index subcommand ---
     index = subparsers.add_parser(
@@ -87,6 +94,8 @@ def _run_web(args: argparse.Namespace) -> None:
     """Launch the web dashboard."""
     config.SCAN_WINDOW_DAYS = args.scan_days
     config.SERVER_PORT = args.port
+    if args.projects_dir:
+        config.CLAUDE_PROJECTS_DIR = Path(args.projects_dir).expanduser()
 
     print("Agent Kitchen starting...")
 
